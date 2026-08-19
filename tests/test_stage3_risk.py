@@ -1,7 +1,7 @@
 """Tests for stage3_forecast.DriftForecaster and risk.compute_risk_index.
 
 Fixtures are built inline from marsad.spectra (gaussian_feature / BAND_GRID)
-and seeded numpy — marsad.synth is deliberately NOT imported here.
+and seeded numpy - marsad.synth is deliberately NOT imported here.
 """
 from __future__ import annotations
 

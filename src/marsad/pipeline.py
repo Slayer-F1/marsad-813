@@ -5,7 +5,7 @@ Flow (see docs/CONTRACTS.md, section "pipeline.py"):
 1. Generate a synthetic Gulf-water training set and split it into fit/holdout.
 2. Fit Stage 1 (learned shallow-water correction) on (observed, true) pairs and
    report its holdout RMSE before/after correction.
-3. Fit Stage 2 (bloom detection & speciation) on Stage-1 *corrected* spectra —
+3. Fit Stage 2 (bloom detection & speciation) on Stage-1 *corrected* spectra -
    the classifier must never see bottom/glint-contaminated spectra, exactly as
    it will not in operations.
 4. Generate a fresh scene, correct it, and assign each monitored intake a slice
@@ -27,7 +27,7 @@ documented as placeholders:
 
 - ``drift_toward_intake_kmday``: bloom-patch advection speed toward the intake.
   Real system: project ocean-current vectors (CMEMS/HYCOM or HF radar) onto the
-  intake bearing. Reservoir gets 0.0 — a Hatta Dam bloom cannot advect anywhere.
+  intake bearing. Reservoir gets 0.0 - a Hatta Dam bloom cannot advect anywhere.
 - ``distance_km``: distance from the detected bloom patch centroid to the
   intake. Real system: geodesic distance from the classified pixel mask.
 """
@@ -56,7 +56,7 @@ INTAKES: list[dict] = [
     {"name": "Hatta Dam", "lat": 24.783, "lon": 56.113, "kind": "reservoir"},
 ]
 
-# Demo scenario composition (PLACEHOLDER — the real system derives these from
+# Demo scenario composition (PLACEHOLDER - the real system derives these from
 # spatial windows around each asset, classified-pixel-mask geodesics, and
 # CMEMS/HYCOM current projections). ``bloom_share`` is the target fraction of
 # the intake's monitored pixels that are bloom pixels; ``distance_km`` and
@@ -99,7 +99,7 @@ def _assign_intake_pixels(labels: np.ndarray, rng: np.random.Generator) -> list[
     slices are disjoint. Sea intakes may only contain dinoflagellate (label 1)
     or clear (label 0) pixels; the reservoir only cyanobacteria (label 2) or
     clear. Each intake's clear/bloom pixel mix targets its
-    ``DEMO_SCENARIO.bloom_share`` — the stand-in for the real spatial window
+    ``DEMO_SCENARIO.bloom_share`` - the stand-in for the real spatial window
     around each asset. The rng only shuffles which pixels land where; the
     composition itself is deterministic so the demo story is reproducible.
     """
@@ -205,7 +205,7 @@ def run_end_to_end(seed: int = 7, outdir=None, n_train: int = 4000,
         chl = float(chl_all[pixels].mean())
 
         # Report the dominant *bloom* type whenever the bloom probability is
-        # alert-relevant (>= AMBER threshold) — an alerted card captioned
+        # alert-relevant (>= AMBER threshold) - an alerted card captioned
         # "no_bloom" reads as a contradiction even when clear pixels still
         # hold a plurality of the mean probability vector.
         if bloom_prob >= AMBER_THRESHOLD:
@@ -229,8 +229,8 @@ def run_end_to_end(seed: int = 7, outdir=None, n_train: int = 4000,
         # classified and ~1 when the classifier genuinely cannot decide.
         # The per-pixel std of bloom probability is the WRONG quantity here:
         # for a confidently classified mixed slice it equals
-        # sqrt(share*(1-share)) — largest exactly when the model is most
-        # certain — which would invert the precautionary promotion.
+        # sqrt(share*(1-share)) - largest exactly when the model is most
+        # certain - which would invert the precautionary promotion.
         pixel_bloom_prob = 1.0 - probs_all[pixels, 0]
         ambiguity = float(np.mean(1.0 - 2.0 * np.abs(pixel_bloom_prob - 0.5)))
 

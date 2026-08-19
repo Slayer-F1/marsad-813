@@ -1,7 +1,7 @@
 """Tests for marsad.stage2_classifier.BloomClassifier.
 
 Fixtures are built inline from marsad.spectra (gaussian_feature / BAND_GRID)
-— deliberately NOT from marsad.synth, which is developed in parallel.
+- deliberately NOT from marsad.synth, which is developed in parallel.
 Three easy synthetic classes:
 
 - 0 no_bloom: flat-ish blue-green water hump, low chl.

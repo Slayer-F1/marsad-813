@@ -1,4 +1,4 @@
-"""Stage 2 — bloom detection & speciation from corrected Rrs spectra.
+"""Stage 2 - bloom detection & speciation from corrected Rrs spectra.
 
 Classifies each pixel spectrum into the three MARSAD classes
 (``0 = no_bloom``, ``1 = dinoflagellate``, ``2 = cyanobacteria``) and
@@ -7,20 +7,20 @@ features concatenated with the full 205-band spectrum.
 
 Physics behind the engineered features
 --------------------------------------
-- **443/555 blue-green ratio** — chlorophyll-a's Soret band absorbs at
+- **443/555 blue-green ratio** - chlorophyll-a's Soret band absorbs at
   443 nm while productive water still reflects around the 555 nm green
   peak, so the ratio drops as biomass rises (the classic OCx logic).
-- **620 nm line depth** — phycocyanin, the marker pigment of toxic
+- **620 nm line depth** - phycocyanin, the marker pigment of toxic
   cyanobacteria, absorbs at 620 nm. Depth of the spectrum below a linear
   continuum drawn between ~600 and ~650 nm isolates that pigment and is
   what separates cyanobacteria from dinoflagellates.
-- **NDCI (708-665)/(708+665)** — the Normalized Difference Chlorophyll
+- **NDCI (708-665)/(708+665)** - the Normalized Difference Chlorophyll
   Index: dense blooms push a reflectance peak near 708 nm while chl-a
   red absorption at 665-675 nm deepens, so NDCI grows with bloom density.
-- **Red-edge line height at 708 nm** — height of Rrs(708) above the
+- **Red-edge line height at 708 nm** - height of Rrs(708) above the
   665-750 nm chord; a positive fluorescence/scattering peak appears only
   for dense surface blooms.
-- **Green peak line height at 555 nm** — height of Rrs(555) above the
+- **Green peak line height at 555 nm** - height of Rrs(555) above the
   490-665 nm chord; sensitive to overall in-water scattering by cells.
 
 The raw spectrum is appended so the learner can exploit any residual
@@ -119,7 +119,7 @@ class BloomClassifier:
       classes (gradient boosting handles the mixed-scale ratio/spectrum
       feature vector well and is fast on the ~210-dim input), and
     - a ``StandardScaler + HistGradientBoostingRegressor`` trained on
-      ``log1p(chl)`` — chlorophyll is lognormal-ish across bloom/no-bloom
+      ``log1p(chl)`` - chlorophyll is lognormal-ish across bloom/no-bloom
       water, so regressing in log space keeps the loss balanced instead of
       being dominated by the densest blooms.
 

@@ -1,4 +1,4 @@
-# MARSAD 813 — Module Contracts (authoritative)
+# MARSAD 813 - Module Contracts (authoritative)
 
 Every module implements EXACTLY these public APIs. `src/marsad/spectra.py` already
 exists and is the single source of truth for the band grid (`N_BANDS = 205`,
@@ -15,7 +15,7 @@ exists and is the single source of truth for the band grid (`N_BANDS = 205`,
   function that uses randomness takes a `seed` parameter.
 - Risk scores are floats in [0, 1].
 
-## `src/marsad/synth.py` — synthetic Gulf-water scene generator
+## `src/marsad/synth.py` - synthetic Gulf-water scene generator
 
 ```python
 LABELS: dict[int, str]  # {0: "no_bloom", 1: "dinoflagellate", 2: "cyanobacteria"}
@@ -49,7 +49,7 @@ Physics to encode in `generate_dataset` (all built from `spectra.gaussian_featur
 - Dinoflagellate blooms occur in shallow AND deep sea pixels; cyanobacteria
   pixels are inland (treat as shallow, low TSS variability).
 
-## `src/marsad/stage1_correction.py` — learned shallow-water correction
+## `src/marsad/stage1_correction.py` - learned shallow-water correction
 
 ```python
 class ShallowWaterCorrector:
@@ -59,7 +59,7 @@ class ShallowWaterCorrector:
     def score(self, rrs_observed, rrs_true) -> dict          # {"rmse_before": f, "rmse_after": f}
     def save(self, path) / @classmethod load(cls, path)      # joblib
 ```
-Implementation — RESIDUAL formulation (load-bearing): the MLP regresses the
+Implementation - RESIDUAL formulation (load-bearing): the MLP regresses the
 **contamination** `observed − true` and `transform` returns
 `observed − predicted_contamination`. It must NOT regress the clean spectrum
 directly: direct regression repaints narrow pigment lines (620 nm phycocyanin)
@@ -68,7 +68,7 @@ with their conditional mean and was measured to cut Stage-2 accuracy from
 contamination targets around a multi-output `MLPRegressor` (one output per
 band). `rmse_after` must beat `rmse_before` on held-out synthetic data.
 
-## `src/marsad/stage2_classifier.py` — bloom detection & speciation
+## `src/marsad/stage2_classifier.py` - bloom detection & speciation
 
 ```python
 class BloomClassifier:
@@ -84,7 +84,7 @@ Implementation: engineered band-ratio features (443/555, 620 line depth, 665/708
 NDCI, red-edge height) CONCATENATED with the full spectrum; sklearn classifier
 (MLP or gradient boosting) + separate regressor for log-chl.
 
-## `src/marsad/stage3_forecast.py` — drift & forecast
+## `src/marsad/stage3_forecast.py` - drift & forecast
 
 ```python
 @dataclass
@@ -102,7 +102,7 @@ Implementation: damped-trend exponential smoothing on the history + an advection
 bump proportional to positive `drift_toward_intake_kmday`; uncertainty band widens
 with sqrt(lead time); clip to [0, 1]; `hi >= mean >= lo` elementwise.
 
-## `src/marsad/risk.py` — per-intake risk policy
+## `src/marsad/risk.py` - per-intake risk policy
 
 ```python
 class RiskLevel(str, Enum): GREEN = "GREEN"; AMBER = "AMBER"; RED = "RED"
@@ -118,15 +118,15 @@ def compute_risk_index(bloom_prob: float, chl_mg_m3: float, trend_per_day: float
 ```
 `bloom_prob` = 1 − P(no_bloom). `uncertainty` is ASSESSMENT uncertainty:
 max(mean normalized forecast hi-lo band, classifier mean ambiguity
-`1 − 2|p − 0.5|`) — never a spatial bloom/clear mix fraction, which is
+`1 − 2|p − 0.5|`) - never a spatial bloom/clear mix fraction, which is
 maximal precisely when the classifier is most confident about a mixed scene.
 Mark the weights/thresholds block with a
 `# --- TEAM DECISION ---` comment: this is operator policy, meant to be tuned.
 Defaults: score = weighted blend (prob dominates), proximity boost < 5 km,
 positive trend boost; RED ≥ 0.65, AMBER ≥ 0.35; high uncertainty can promote
-AMBER→RED near intakes (precautionary) — never silently downgrade.
+AMBER→RED near intakes (precautionary) - never silently downgrade.
 
-## `src/marsad/pipeline.py` — end-to-end orchestration
+## `src/marsad/pipeline.py` - end-to-end orchestration
 
 ```python
 INTAKES: list[dict]  # exactly these four:
@@ -170,15 +170,15 @@ assessment → write `outputs/results.json` AND `dashboard/data.js`.
 `scripts/run_demo.py`: argparse (`--seed`, `--fast`), calls `run_end_to_end`,
 prints a readable per-intake summary table + metrics to stdout.
 `scripts/download_gloria.py`: documented stub with the real GLORIA (PANGAEA
-doi:10.1594/PANGAEA.948492) and NASA PACE URLs, `--dest` arg, clear TODO notes —
+doi:10.1594/PANGAEA.948492) and NASA PACE URLs, `--dest` arg, clear TODO notes -
 no network call executed by default.
 
-## `dashboard/index.html` — self-contained control-room dashboard
+## `dashboard/index.html` - self-contained control-room dashboard
 
 Reads `<script src="data.js">` (works from file://, no CDN, no external fonts).
 Vanilla JS + inline SVG/canvas. Dark control-room aesthetic, MARSAD (مَرصَد)
 branding, English primary. Sections: (1) header with generated time + overall
-status; (2) one risk card per intake — level colour, score dial, dominant bloom
+status; (2) one risk card per intake - level colour, score dial, dominant bloom
 type, chl, rationale list; (3) history + 7-day forecast chart with lo/hi
 uncertainty band per intake (selectable); (4) Stage 1 before/after spectra chart
 with key wavelengths annotated; (5) model metrics incl. confusion matrix.

@@ -1,4 +1,4 @@
-"""Tests for marsad.synth — synthetic Gulf-water scene generator.
+"""Tests for marsad.synth - synthetic Gulf-water scene generator.
 
 Fast, seeded checks of the contract: shapes/dtypes, physical value ranges,
 label mixture, phycocyanin confined to cyanobacteria, the shallow-water

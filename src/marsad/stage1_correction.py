@@ -1,4 +1,4 @@
-"""Stage 1 — learned shallow-water spectral correction.
+"""Stage 1 - learned shallow-water spectral correction.
 
 Physics rationale
 -----------------
@@ -6,14 +6,14 @@ Over optically shallow Gulf water the at-sensor remote-sensing reflectance is
 contaminated by three additive/multiplicative effects that a purely analytic
 atmospheric correction does not remove:
 
-* **Bottom reflectance** — sandy sea-floor light escaping the water column,
+* **Bottom reflectance** - sandy sea-floor light escaping the water column,
   ``R_bottom * exp(-2 * Kd * depth)``: a broad, smooth lift across the
   VIS/NIR that mimics sediment and biases every band-ratio bloom index.
-* **Sunglint** — specular sky/sun reflection at the surface: a spectrally
+* **Sunglint** - specular sky/sun reflection at the surface: a spectrally
   flat offset that is the *only* signal left in the SWIR (water itself is
   ~black beyond ~1300 nm), so the SWIR bands carry the information needed
   to estimate and subtract it.
-* **Sensor noise** — ~1–2 % multiplicative Gaussian.
+* **Sensor noise** - ~1–2 % multiplicative Gaussian.
 
 These effects are non-linear functions of unobserved state (depth, Kd,
 bottom albedo, glint geometry), but they leave a joint spectral fingerprint
@@ -22,10 +22,10 @@ learn to estimate them from (observed, clean) training pairs, using e.g.
 the SWIR floor to infer the glint offset and the shape of the NIR shoulder
 to infer the bottom term.
 
-Implementation — RESIDUAL formulation
+Implementation - RESIDUAL formulation
 -------------------------------------
 The network predicts the **contamination** ``Rrs_observed - Rrs_true`` and
-the correction is ``observed - predicted_contamination`` — it does NOT
+the correction is ``observed - predicted_contamination`` - it does NOT
 regress the clean spectrum directly. This matters: a direct
 ``observed -> clean`` regression minimises average per-band error and
 therefore repaints narrow diagnostic pigment features (e.g. the ~5e-4 sr^-1
@@ -121,7 +121,7 @@ class ShallowWaterCorrector:
                 f"paired sample counts differ: {x.shape[0]} != {y.shape[0]}"
             )
         # Residual target: regress the contamination, not the clean spectrum
-        # (see module docstring — preserves narrow pigment lines).
+        # (see module docstring - preserves narrow pigment lines).
         contamination = x - y
         xs = self._x_scaler.fit_transform(x)
         ys = self._y_scaler.fit_transform(contamination)

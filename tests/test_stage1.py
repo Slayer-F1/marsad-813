@@ -1,9 +1,9 @@
-"""Tests for Stage 1 — ShallowWaterCorrector.
+"""Tests for Stage 1 - ShallowWaterCorrector.
 
 Fixtures are built inline from ``marsad.spectra`` primitives (NOT from
 ``marsad.synth``, which is developed in parallel): clean spectra are smooth
 water-like Gaussian combinations, and observed spectra add the three
-contamination terms the corrector is meant to remove — a flat sunglint
+contamination terms the corrector is meant to remove - a flat sunglint
 offset, a broad bottom-reflectance bump, and multiplicative sensor noise.
 """
 from __future__ import annotations

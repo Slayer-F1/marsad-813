@@ -1,4 +1,4 @@
-"""Per-intake risk policy — turn model outputs into an operator alert.
+"""Per-intake risk policy - turn model outputs into an operator alert.
 
 Combines the Stage 2 bloom probability and chlorophyll estimate with the
 Stage 3 trend, the distance between the detected bloom and the intake,
@@ -12,7 +12,7 @@ Design rationale
   alert regardless of context, so a certain bloom alone must be able to
   reach RED.
 * Chlorophyll, positive trend, and proximity are corroborating boosters
-  with saturating (clipped-linear) responses — each can escalate a
+  with saturating (clipped-linear) responses - each can escalate a
   borderline case but none can create an alert out of nothing.
 * The proximity boost is gated by the bloom probability: "3 km from the
   intake" only matters if there is actually a bloom at 3 km.
@@ -44,7 +44,7 @@ class RiskAssessment:
 # probability-of-detection vs false-alarm trade-off for the desalination
 # operators: raising RED_THRESHOLD or the saturation constants means
 # fewer alarms but a higher chance of missing a real intake event.
-# They are policy, not physics — tune them with the plant, not the model.
+# They are policy, not physics - tune them with the plant, not the model.
 W_PROB = 0.70                    # bloom probability dominates the blend
 W_CHL = 0.10                     # chlorophyll-a corroboration weight
 W_TREND = 0.10                   # rising-risk (positive trend) boost weight
@@ -89,7 +89,7 @@ def compute_risk_index(bloom_prob: float, chl_mg_m3: float, trend_per_day: float
         Assessment uncertainty in [0, 1]: the max of the mean normalized
         forecast hi-lo band width and the classifier's mean ambiguity
         (1 - 2|p - 0.5|). Used only for the precautionary AMBER->RED
-        promotion. NOT a spatial bloom/clear mix fraction — a confidently
+        promotion. NOT a spatial bloom/clear mix fraction - a confidently
         classified half-bloom scene is not "uncertain".
 
     Returns
@@ -135,7 +135,7 @@ def compute_risk_index(bloom_prob: float, chl_mg_m3: float, trend_per_day: float
 
     # Precautionary promotion: high uncertainty close to an intake turns a
     # BORDERLINE AMBER (within PROMOTION_MARGIN of the RED threshold) into
-    # RED.  Promotion only ever RAISES the level — uncertainty never
+    # RED.  Promotion only ever RAISES the level - uncertainty never
     # silently downgrades an alert.
     if (level is RiskLevel.AMBER
             and score >= RED_THRESHOLD - PROMOTION_MARGIN
@@ -144,7 +144,7 @@ def compute_risk_index(bloom_prob: float, chl_mg_m3: float, trend_per_day: float
         level = RiskLevel.RED
         rationale.append(
             f"assessment uncertainty {unc * 100:.0f}% within "
-            f"{dist:.1f} km of intake — precautionary promotion AMBER to RED")
+            f"{dist:.1f} km of intake - precautionary promotion AMBER to RED")
 
     if level is RiskLevel.GREEN:
         rationale.append("no significant bloom threat to this intake")

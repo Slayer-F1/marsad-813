@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MARSAD 813 — HAB Early Warning</title>
+<title>MARSAD 813 - HAB Early Warning</title>
 <style>
 /* ================= MARSAD 813 control-room theme =================
    Committed dark ops-room design (deep navy water palette).
    Chart series (validated for CVD + contrast on this surface):
      observed #d95926 · corrected #199e70 · true #3987e5
    Status colors are reserved and always paired with a text label
-   and a shape glyph — never color alone.                          */
+   and a shape glyph - never color alone.                          */
 :root{
   color-scheme: dark;
   --bg:        #060b14;
@@ -239,13 +239,13 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
 
   /* ---------- missing-data notice ---------- */
   if (!D) {
-    document.title = "MARSAD 813 — no data";
+    document.title = "MARSAD 813 - no data";
     app.innerHTML = `
       <div class="notice"><div class="box">
         ${logoSVG(46)}
         <h2>MARSAD 813 <span style="color:var(--accent)">·</span>
             <span dir="rtl">مَرصَد</span></h2>
-        <p><b>No data loaded</b> — <code style="display:inline;padding:1px 6px;margin:0">dashboard/data.js</code>
+        <p><b>No data loaded</b> - <code style="display:inline;padding:1px 6px;margin:0">dashboard/data.js</code>
            was not found next to this page.</p>
         <p>Generate it by running the demo pipeline from the repo root:</p>
         <code>python scripts/run_demo.py</code>
@@ -262,7 +262,7 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
   const mm = D.model_metrics;
   const rmseGain = (1 - mm.stage1_rmse_after / mm.stage1_rmse_before) * 100;
   const holdoutN = mm.stage2_confusion.flat().reduce((a, b) => a + b, 0);
-  // Forward-looking OUTLOOK (forecast day+7 vs today) — deliberately not
+  // Forward-looking OUTLOOK (forecast day+7 vs today) - deliberately not
   // called "trend": the rationale strings describe the RECENT history trend,
   // which can disagree with where the forecast says risk is heading.
   const trendOf = it => {
@@ -340,7 +340,7 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
         <span class="counts">${counts.RED} RED · ${counts.AMBER} AMBER · ${counts.GREEN} GREEN</span>
       </div>
       <div class="hd-meta">
-        <span class="badge-syn" title="All spectra, labels and scores are simulated — no real satellite data behind this view.">SYNTHETIC DEMONSTRATION DATA</span>
+        <span class="badge-syn" title="All spectra, labels and scores are simulated - no real satellite data behind this view.">SYNTHETIC DEMONSTRATION DATA</span>
         <span class="stamp">generated <b>${esc(D.generated_utc)}</b></span>
       </div>
     </div>
@@ -377,7 +377,7 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
         <span class="legend" id="sp-legend"></span>
       </div>
       <div class="chart-wrap" id="specchart"></div>
-      <div class="cap"><b>Key wavelengths</b> — 443 / 675 nm chl-a absorption · 555 nm green peak ·
+      <div class="cap"><b>Key wavelengths</b> - 443 / 675 nm chl-a absorption · 555 nm green peak ·
         620 nm phycocyanin (cyanobacteria) · 665–708 nm NDCI / bloom red edge.
         Clean water is ~black in SWIR: the flat offset the observed spectrum keeps out to 1700 nm is
         surface/water-column contamination (sunglint plus residual bottom signal), which Stage&nbsp;1 removes.</div>
@@ -399,8 +399,8 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
   </section>
 
   <footer>
-    <span>MARSAD 813 — <span dir="rtl">مَرصَد</span> · Arab 813 Space Hackathon</span>
-    <span>Synthetic demonstration data — not operational guidance</span>
+    <span>MARSAD 813 - <span dir="rtl">مَرصَد</span> · Arab 813 Space Hackathon</span>
+    <span>Synthetic demonstration data - not operational guidance</span>
     <span>205-band simulated spectra · 400–1700 nm</span>
   </footer>`;
 
@@ -483,7 +483,7 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
       <text class="axis-t" x="${RC.l + RC.pw - 4}" y="${ry(v) - 5}" text-anchor="end" opacity=".9">${lab}</text>`;
 
     document.getElementById("rc-title").textContent =
-      `${it.name} — risk index, day −29 → +7`;
+      `${it.name} - risk index, day −29 → +7`;
     document.getElementById("rc-sub").textContent =
       `today ${it.risk.score.toFixed(2)} · day +7 mean ` +
       `${it.forecast[it.forecast.length - 1].score.toFixed(2)} ` +
@@ -516,7 +516,7 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
     // data table (accessible fallback for the chart)
     document.getElementById("risktable").innerHTML =
       `<tr><th>day</th><th>score</th><th>lo</th><th>hi</th></tr>` +
-      it.history.map(p => `<tr><td>${p.day}</td><td>${p.score.toFixed(3)}</td><td>—</td><td>—</td></tr>`).join("") +
+      it.history.map(p => `<tr><td>${p.day}</td><td>${p.score.toFixed(3)}</td><td>-</td><td>-</td></tr>`).join("") +
       it.forecast.map(p => `<tr><td>+${p.day}</td><td>${p.score.toFixed(3)}</td><td>${p.lo.toFixed(3)}</td><td>${p.hi.toFixed(3)}</td></tr>`).join("");
 
     // hover: crosshair + tooltip at nearest day
@@ -620,7 +620,7 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
     const gx = sx(1250), gy = sy(S.observed[134] || 0.002);
     const anno = `
       <line x1="${gx}" y1="${gy - 8}" x2="${gx}" y2="${gy - 46}" stroke="var(--ink3)" stroke-width="1"/>
-      <text class="note-t" x="${gx}" y="${gy - 54}" text-anchor="middle">glint + bottom residual — clean water is ~black in SWIR</text>`;
+      <text class="note-t" x="${gx}" y="${gy - 54}" text-anchor="middle">glint + bottom residual - clean water is ~black in SWIR</text>`;
 
     document.getElementById("specchart").innerHTML = `
     <svg viewBox="0 0 ${W} ${H}" role="img"

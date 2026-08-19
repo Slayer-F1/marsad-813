@@ -19,7 +19,7 @@ models/
 # only ever come from a full run (see scripts/run_demo.py --fast).
 outputs/fast-preview/
 
-# Real satellite/in-situ data is large and licensed — never commit it.
+# Real satellite/in-situ data is large and licensed - never commit it.
 # Fetch with scripts/download_gloria.py instead.
 data/raw/
 data/cache/

@@ -42,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.fast:
         n_train, n_scene = 800, 300
-        # A fast run trains weaker models — never let it silently replace
+        # A fast run trains weaker models - never let it silently replace
         # the judge-facing dashboard/data.js written by a full run.
         outdir = Path(__file__).resolve().parents[1] / "outputs" / "fast-preview"
     else:
@@ -87,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"    {lbl:<{label_w}}" + "  ".join(f"{v:>10d}" for v in row))
 
     if args.fast:
-        print(f"\nFast preview written under {outdir} — "
+        print(f"\nFast preview written under {outdir} - "
               "the real dashboard/data.js was NOT touched.")
     else:
         print("\nOutputs written: outputs/results.json, dashboard/data.js")

@@ -8,7 +8,7 @@ stable path to look for real spectra.
 
 Datasets
 --------
-1. GLORIA — globally representative in-situ hyperspectral Rrs + water-quality
+1. GLORIA - globally representative in-situ hyperspectral Rrs + water-quality
    dataset (7,572 stations, 350–900 nm at 1 nm; chl-a, TSS, aCDOM labels).
    Lehmann et al. (2023), Scientific Data.
    DOI:  doi:10.1594/PANGAEA.948492
@@ -17,7 +17,7 @@ Datasets
          beyond 900 nm padded with the synthetic SWIR model) and replace/augment
          ``synth.generate_dataset`` training pairs with real (Rrs, chl) rows.
 
-2. NASA PACE OCI Level-2 ocean colour — real hyperspectral satellite granules
+2. NASA PACE OCI Level-2 ocean colour - real hyperspectral satellite granules
    (~5 nm, 340–890 nm) over the Gulf / Sea of Oman, the operational analogue
    of the Arab 813 instrument.
    Portal:   https://oceancolor.gsfc.nasa.gov/data/pace/

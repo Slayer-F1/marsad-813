@@ -1,13 +1,13 @@
-# MARSAD 813 — Hyperspectral Harmful-Algal-Bloom Early Warning
+# MARSAD 813 - Hyperspectral Harmful-Algal-Bloom Early Warning
 
 **An AI early-warning service that converts hyperspectral satellite spectra into bloom
 alerts and 3–7 day risk forecasts for UAE desalination intakes and inland water
-reserves — engineered for the shallow, turbid Gulf water where standard satellite
+reserves - engineered for the shallow, turbid Gulf water where standard satellite
 algorithms fail.**
 
 Working name **MARSAD** (مَرصَد, Arabic for *watchpost / observatory*): a fixed
 lookout that watches the water so operators do not learn about a bloom when cells
-reach the intake screens. Built for the **Arab 813 Space Hackathon 2026** —
+reach the intake screens. Built for the **Arab 813 Space Hackathon 2026** -
 Theme 4 (Water Quality & Inland/Coastal Water Intelligence), Hyperspectral Data
 Track (Satellite 813, 100+ bands).
 
@@ -17,7 +17,7 @@ The Arabian Gulf is the most desalination-dependent sea on Earth, and its water 
 exactly where off-the-shelf satellite water-quality monitoring fails: it is shallow,
 turbid, and hypersaline. Simple band-ratio chlorophyll algorithms tuned for open
 ocean give garbage here because the algae pigment signal is mixed with sediment
-backscatter, sunglint, and — in shallow coastal pixels — reflectance from the sea
+backscatter, sunglint, and - in shallow coastal pixels - reflectance from the sea
 bottom itself. Broad-band sensors cannot separate these effects, and they do not
 sample diagnostic pigments such as phycocyanin (~620 nm, the toxic-cyanobacteria
 marker) at all. The stakes are national: desalination provides most UAE potable
@@ -25,7 +25,7 @@ water, stored supply covers roughly a day or two of demand, the 2008–09
 *Cochlodinium* bloom forced plant shutdowns, and losses during red-tide events run
 over Dh368,000/day. Oman launched a bloom-prediction model in 2024; the UAE-side
 gap is open. Solving that specific failure with a learned shallow-water correction
-is the core of this project — not a generic bloom demo.
+is the core of this project - not a generic bloom demo.
 
 ## Three-stage architecture
 
@@ -43,27 +43,27 @@ flowchart LR
     E --> F["Dashboard + alert feed"]
 ```
 
-1. **Stage 1 — Shallow-water spectral correction (the novel core).** A learned
+1. **Stage 1 - Shallow-water spectral correction (the novel core).** A learned
    correction that strips sunglint, sediment, and bottom-reflectance effects from
    coastal spectra. This is what makes everything downstream credible in Gulf water.
-2. **Stage 2 — Bloom detection & speciation.** A spectral classifier over the band
+2. **Stage 2 - Bloom detection & speciation.** A spectral classifier over the band
    dimension separating no-bloom, dinoflagellate red tide (*Karenia*,
    *Cochlodinium*) near intakes, and toxic cyanobacteria (phycocyanin ~620 nm) in
-   inland reservoirs — plus a chlorophyll-a intensity estimate.
-3. **Stage 3 — Drift & forecast.** Fuses the daily Sentinel watch layer with sparse
+   inland reservoirs - plus a chlorophyll-a intensity estimate.
+3. **Stage 3 - Drift & forecast.** Fuses the daily Sentinel watch layer with sparse
    hyperspectral scenes to produce per-intake risk indices with 3–7 day lead time
    and explicit uncertainty bands. Honest architecture: 813's swath/revisit cannot
    monitor alone; fusion is the design, not a workaround.
 
 Module-level APIs are frozen in [`docs/CONTRACTS.md`](docs/CONTRACTS.md).
 The band grid (205 bands, 400–1700 nm) lives in
-[`src/marsad/spectra.py`](src/marsad/spectra.py) — the single source of truth,
+[`src/marsad/spectra.py`](src/marsad/spectra.py) - the single source of truth,
 to be swapped for the real 813 band centres when GIQ publishes them.
 
 ## Quickstart
 
 The virtual environment already exists at `.venv` (numpy, scikit-learn, pytest).
-Do **not** create or activate anything — call its interpreter directly from the
+Do **not** create or activate anything - call its interpreter directly from the
 repo root.
 
 **PowerShell**
@@ -132,11 +132,11 @@ marsad-813/
 | Ground truth / events | MOCCAE red-tide monitoring records, published 2008–09 Gulf of Oman bloom studies, EAD coastal water-quality data, Oman SQU bloom literature |
 | Validation | Hindcast on documented historical bloom events: show the model flags them days before reported impact |
 
-## Current status — honest
+## Current status - honest
 
 **Today the models run end-to-end on physics-based synthetic Gulf spectra, not on
 real satellite data.** `src/marsad/synth.py` generates scenes on the 205-band grid
-encoding the known optics — chlorophyll absorption at 443/675 nm, the 555 nm green
+encoding the known optics - chlorophyll absorption at 443/675 nm, the 555 nm green
 peak, the 708 nm red-edge of dense blooms, the 620 nm phycocyanin dip, sediment
 backscatter, sandy-bottom reflectance attenuated by depth, sunglint, and sensor
 noise. That is enough to prove the architecture (Stage 1 measurably reduces

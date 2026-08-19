@@ -1,12 +1,12 @@
-"""Stage 3 — bloom-risk drift & forecast.
+"""Stage 3 - bloom-risk drift & forecast.
 
 Turns the daily risk-score history of one intake into a short-range
 probabilistic forecast. The model is deliberately small and transparent:
 
 * **Damped-trend exponential smoothing** (Holt's linear method with a
   damping factor ``PHI < 1``, implemented directly in numpy). Bloom risk
-  is strongly autocorrelated on daily scales — blooms build and decay
-  over days — so a level + trend model captures the local dynamics,
+  is strongly autocorrelated on daily scales - blooms build and decay
+  over days - so a level + trend model captures the local dynamics,
   while damping keeps multi-day extrapolations from running away
   (a three-day rise does not mean the risk rises forever).
 * **Advection bump**: surface currents pushing a bloom patch toward an
@@ -29,7 +29,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-# Smoothing constants (fixed, not fitted — the histories are short daily
+# Smoothing constants (fixed, not fitted - the histories are short daily
 # series and fixed constants keep the forecaster deterministic and fast).
 _ALPHA = 0.5    # level smoothing: how fast the level tracks new observations
 _BETA = 0.3     # trend smoothing: how fast the slope estimate adapts
@@ -37,7 +37,7 @@ _PHI = 0.85     # per-day trend damping (0 < PHI < 1)
 
 # Uncertainty band: +/- z for the 10th/90th percentiles of a normal.
 _Z_10_90 = 1.2815515655446004
-# Floor on the one-step residual spread — a perfectly flat history still
+# Floor on the one-step residual spread - a perfectly flat history still
 # carries irreducible observation/model uncertainty.
 _SIGMA_FLOOR = 0.02
 
@@ -95,7 +95,7 @@ class DriftForecaster:
         drift_toward_intake_kmday : float
             Advection speed of the bloom patch toward the intake in km/day.
             Positive values (approaching) add risk; negative values
-            (receding) add nothing — we never *reduce* forecast risk on
+            (receding) add nothing - we never *reduce* forecast risk on
             the basis of currents, which is the precautionary choice for
             an early-warning product.
 

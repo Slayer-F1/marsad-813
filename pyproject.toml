@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "marsad"
 version = "0.1.0"
-description = "MARSAD 813 — hyperspectral harmful-algal-bloom early warning for Gulf desalination intakes and inland reservoirs"
+description = "MARSAD 813 - hyperspectral harmful-algal-bloom early warning for Gulf desalination intakes and inland reservoirs"
 requires-python = ">=3.11"
 dependencies = ["numpy>=1.26", "scikit-learn>=1.4"]
 

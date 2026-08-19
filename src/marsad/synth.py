@@ -4,38 +4,38 @@ Generates paired (contaminated, clean) remote-sensing reflectance Rrs spectra
 on the 813 band grid (:mod:`marsad.spectra`), with per-pixel biogeochemistry
 (chlorophyll-a, phycocyanin, suspended sediment, depth) and three classes:
 
-* ``0 no_bloom``        — oligotrophic/mesotrophic Gulf water,
-* ``1 dinoflagellate``  — red-tide blooms (Karenia/Cochlodinium), shallow AND
+* ``0 no_bloom``        - oligotrophic/mesotrophic Gulf water,
+* ``1 dinoflagellate``  - red-tide blooms (Karenia/Cochlodinium), shallow AND
   deep sea pixels,
-* ``2 cyanobacteria``   — toxic inland-reservoir blooms, always shallow,
+* ``2 cyanobacteria``   - toxic inland-reservoir blooms, always shallow,
   carrying the phycocyanin marker pigment.
 
 Physics encoded (all spectral features built from
 :func:`marsad.spectra.gaussian_feature`):
 
-* **Base water** — blue-bright Rrs decaying exponentially with wavelength so
+* **Base water** - blue-bright Rrs decaying exponentially with wavelength so
   reflectance is ~0 beyond ~900 nm and effectively black in the SWIR (water
   absorption dominates there).
-* **Chlorophyll-a** — absorption dips at 443 nm (Soret band) and 675 nm (red
+* **Chlorophyll-a** - absorption dips at 443 nm (Soret band) and 675 nm (red
   band) whose depth scales with log-chl (pigment packaging makes absorption
   sublinear in concentration); a green reflectance peak near 555 nm; and for
   dense surface blooms a red-edge peak near 708 nm (scattering by the cell
   slick where water absorption already dominates).
-* **Phycocyanin** — an extra absorption dip at 620 nm, essentially only for
+* **Phycocyanin** - an extra absorption dip at 620 nm, essentially only for
   cyanobacteria pixels: it is the diagnostic that separates label 2 from a
   spectrally similar dinoflagellate bloom.
-* **TSS** — broad mineral backscatter lift, stronger at short wavelengths
+* **TSS** - broad mineral backscatter lift, stronger at short wavelengths
   (power-law slope varies per pixel), rolled off in the NIR/SWIR by water
   absorption.
-* **Shallow bottom** (``rrs_observed`` only) — sandy bottom reflectance
+* **Shallow bottom** (``rrs_observed`` only) - sandy bottom reflectance
   attenuated by the two-way diffuse path, ``R_bottom * exp(-2 * Kd * depth)``,
   with Kd increased by chl and TSS (more absorbing/scattering water hides the
   bottom faster). Beyond ~15 m the term is below the sensor noise floor, so it
   is only applied to shallow pixels.
-* **Sunglint** (``rrs_observed`` only) — spectrally flat specular offset,
+* **Sunglint** (``rrs_observed`` only) - spectrally flat specular offset,
   nonzero even in the SWIR (which is why the SWIR-dark band is the classic
   glint probe).
-* **Sensor noise** — 1-2 % multiplicative Gaussian on ``rrs_observed``.
+* **Sensor noise** - 1-2 % multiplicative Gaussian on ``rrs_observed``.
 
 The design goal is the project's core asymmetry: on *clean* spectra the three
 classes are statistically separable (a linear classifier exceeds 0.85 holdout

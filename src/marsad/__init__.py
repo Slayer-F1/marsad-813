@@ -1,4 +1,4 @@
-"""MARSAD 813 — hyperspectral harmful-algal-bloom early warning.
+"""MARSAD 813 - hyperspectral harmful-algal-bloom early warning.
 
 Arab 813 Space Hackathon 2026 entry. Three-stage pipeline:
 Stage 1 shallow-water spectral correction, Stage 2 bloom detection &
