@@ -1,0 +1,111 @@
+name: CI
+
+# Two independent jobs so a style regression and a test failure are never
+# confused for each other, and so the guard job needs no Python at all.
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: pytest (Python 3.12)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # Dependencies are pinned to the three the project actually allows
+      # (numpy, scikit-learn, stdlib) plus pytest. Installing the package
+      # itself is unnecessary: conftest.py puts src/ on sys.path.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy scikit-learn pytest
+
+      - name: Report the environment
+        run: |
+          python -VV
+          python -c "import numpy, sklearn; print('numpy', numpy.__version__); print('scikit-learn', sklearn.__version__)"
+
+      - name: Run the test suite
+        run: pytest -q
+
+  no-em-dash:
+    name: No em-dash (U+2014)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # fetch-depth: 0 so the commit-message scan can walk the pushed range
+      # and, on a pull request, the base..head range.
+      - name: Check out the repository with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The character is never written literally anywhere in this file: a
+      # literal em-dash here would make the guard fail on its own workflow.
+      # printf '\342\200\224' emits the UTF-8 bytes of U+2014 instead, which
+      # is also locale independent, unlike a PCRE \x{2014} class.
+      - name: Scan tracked files
+        shell: bash
+        run: |
+          em=$(printf '\342\200\224')
+          hits=$(git ls-files -z | xargs -0 -r grep -n -I -F -e "$em" -- || true)
+          if [ -n "$hits" ]; then
+            echo "::error::Em-dash (U+2014) found in tracked files. Use a plain hyphen '-' instead."
+            echo "$hits"
+            exit 1
+          fi
+          echo "Clean: $(git ls-files | wc -l) tracked files carry no em-dash."
+
+      - name: Scan commit messages
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          em=$(printf '\342\200\224')
+
+          # Which commits this event introduces. A brand-new branch reports an
+          # all-zero "before" SHA and a force-push can leave an unreachable
+          # one, so both fall back to the tip commit rather than failing.
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            range="$PR_BASE_SHA..$PR_HEAD_SHA"
+          else
+            range="$BEFORE_SHA..$HEAD_SHA"
+          fi
+          commits=$(git rev-list "$range" 2>/dev/null || git rev-list -n 1 "$HEAD_SHA")
+
+          count=0
+          offenders=$(mktemp)
+          for sha in $commits; do
+            count=$((count + 1))
+            if git log -1 --format=%B "$sha" | grep -qF -e "$em"; then
+              git log -1 --format='  %h %s' "$sha" >> "$offenders"
+            fi
+          done
+
+          if [ -s "$offenders" ]; then
+            echo "::error::Commit message contains an em-dash (U+2014). Use a plain hyphen '-' instead."
+            cat "$offenders"
+            exit 1
+          fi
+          echo "Clean: $count commit message(s) carry no em-dash."

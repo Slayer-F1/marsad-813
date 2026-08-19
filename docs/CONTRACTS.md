@@ -160,12 +160,23 @@ assessment → write `outputs/results.json` AND `dashboard/data.js`.
     "risk": {"score": 0.0, "level": "GREEN|AMBER|RED", "rationale": [""]},
     "bloom": {"probs": {"no_bloom": 0.0, "dinoflagellate": 0.0, "cyanobacteria": 0.0},
                "dominant": "", "chl_mg_m3": 0.0},
+    "uncertainty": {"total": 0.0, "epistemic": 0.0, "confidence": 0.0,
+                     "review_recommended": false},
     "history": [{"day": -29, "score": 0.0}],
     "forecast": [{"day": 1, "score": 0.0, "lo": 0.0, "hi": 0.0}]
   }],
   "spectra_example": {"wavelength_nm": [], "observed": [], "corrected": [], "true": []}
 }
 ```
+
+`intakes[].uncertainty` is the v0.2 addition required by docs/CONTRACTS-V2.md
+("Fixes required in existing modules", item 1): MODEL uncertainty from
+`uncertainty.EnsembleClassifier`, averaged over that intake's pixels. `total`
+and `epistemic` are entropies normalised to [0, 1], `confidence` is the mean
+top-class probability, and `review_recommended` is a JSON boolean set by
+`uncertainty.review_queue` on the aggregated `total`. It is reported only -
+it never downgrades a risk level. Distinct from the ASSESSMENT uncertainty
+argument of `risk.compute_risk_index` above.
 
 `scripts/run_demo.py`: argparse (`--seed`, `--fast`), calls `run_end_to_end`,
 prints a readable per-intake summary table + metrics to stdout.

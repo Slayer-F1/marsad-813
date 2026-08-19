@@ -26,6 +26,12 @@
   --s-obs:     #d95926;
   --s-cor:     #199e70;
   --s-true:    #3987e5;
+  /* benchmark series (v0.2): the three literature algorithms read as one warm
+     family, MARSAD keeps the brand teal - so "classical vs ours" is legible
+     before any label is read. Every bar also carries its printed value. */
+  --s-oc4:     #d95926;
+  --s-oc3m:    #e8a33c;
+  --s-ndci:    #9b7ede;
   --st-green:  #0ca30c;
   --st-amber:  #fab219;
   --st-red:    #d03b3b;
@@ -176,6 +182,47 @@ table.cmx td{min-width:76px;text-align:center;padding:10px 7px;border-radius:6px
 table.cmx td .pc{display:block;font-size:10px;font-weight:400;opacity:.85;margin-top:2px}
 .cmx-cap{font-size:11.5px;color:var(--ink3);margin-top:10px}
 
+/* ---------- per-intake model uncertainty (v0.2) ---------- */
+.unc{margin-top:9px;border-top:1px solid var(--border);padding-top:9px}
+.unc-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.unc-h .ul{font-size:10.5px;letter-spacing:.08em;font-weight:600;color:var(--ink3)}
+.unc-h .uv{font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--ink)}
+.ubar{height:5px;border-radius:3px;background:var(--panel2);margin-top:6px;overflow:hidden}
+.ubar i{display:block;height:100%;border-radius:3px;background:var(--accent)}
+.unc-m{font-family:var(--mono);font-size:10.5px;color:var(--ink3);margin-top:5px}
+.unc-na{font-size:11px;line-height:1.4;color:var(--ink3);margin-top:5px}
+.review{display:flex;align-items:center;gap:7px;margin-top:8px;padding:5px 9px;border-radius:6px;
+  font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--st-amber);
+  background:rgba(250,178,25,.10);border:1px solid rgba(250,178,25,.45)}
+.review .g{font-size:12px;line-height:1;flex:none}
+
+/* ---------- v0.2 evidence sections (benchmark + sensor ablation) ---------- */
+.evsec .tiles{margin-bottom:14px}
+.hn{display:flex;gap:11px;align-items:flex-start;margin-bottom:14px;padding:10px 14px;
+  border:1px solid rgba(250,178,25,.30);border-radius:10px;background:rgba(250,178,25,.06);
+  font-size:12px;line-height:1.5;color:var(--ink2)}
+.hn .k{flex:none;margin-top:1px;padding:2px 7px;border:1px solid rgba(250,178,25,.45);border-radius:4px;
+  font-size:9.5px;letter-spacing:.10em;font-weight:700;color:var(--st-amber);white-space:nowrap}
+.bar-v{font-size:10px;font-weight:600}
+.grp-l{font-size:11.5px;font-weight:600;fill:var(--ink2)}
+.grp-l.hi{fill:var(--st-red);font-weight:700}
+.grp-l.hi2{fill:var(--accent);font-weight:700}
+.grp-s{font-size:10px;fill:var(--ink3)}
+.grp-620.yes{fill:var(--st-green)}
+.grp-620.no{fill:var(--st-red)}
+ul.snotes{list-style:none;display:grid;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
+ul.snotes li{position:relative;padding-left:16px;font-size:12px;color:var(--ink2)}
+ul.snotes li::before{content:"›";position:absolute;left:2px;color:var(--accent)}
+ul.snotes b{color:var(--ink);font-weight:600}
+.tagpc{font-family:var(--mono);font-size:10.5px;font-weight:600;margin-left:7px;white-space:nowrap}
+.tagpc.yes{color:var(--st-green)}
+.tagpc.no{color:var(--st-red)}
+.mini{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:center}
+.mini h4{font-size:13.5px;font-weight:650;color:var(--ink);margin-bottom:6px}
+.mini p{font-size:12.5px;color:var(--ink2);max-width:640px;margin:0 auto}
+.mini code{display:inline-block;font-family:var(--mono);font-size:12.5px;color:var(--accent);
+  background:#081120;border:1px solid var(--gridhi);border-radius:8px;padding:9px 15px;margin:12px 0 4px}
+
 /* ---------- footer / notice ---------- */
 footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
   display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between;
@@ -191,6 +238,11 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
   header.hd{flex-direction:column;align-items:flex-start}
   .wrap{padding:14px 12px 32px}
   .panel{padding:12px}
+  /* The grouped bar charts carry a printed value on every bar, so they stop
+     being legible below ~640 px. Let them scroll inside their own box rather
+     than shrink the type; the page itself never scrolls sideways. */
+  #benchchart,#ablchart{overflow-x:auto}
+  #benchchart svg,#ablchart svg{min-width:640px}
 }
 </style>
 </head>
@@ -200,10 +252,14 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
 <div id="tt" aria-hidden="true"></div>
 
 <script src="data.js"></script>
+<script src="benchmark.js"></script>
 <script>
 "use strict";
 (function () {
   const D = window.MARSAD_DATA;
+  // Optional: written by scripts/run_benchmark.py. Sections 02 and 03 degrade
+  // to a "run the benchmark" notice when it is absent; nothing else depends on it.
+  const B = window.MARSAD_BENCHMARK;
   const app = document.getElementById("app");
 
   /* ---------- shared helpers ---------- */
@@ -286,6 +342,95 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
   const linePath = pts =>
     pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ");
 
+  /* Grouped bar chart - shared by sections 02 and 03. Deliberately built on
+     the same conventions as the line charts above: fixed viewBox that scales
+     to the panel width, .axis-t / .axis-cap / .note-t type classes, --grid
+     rules and the one shared #tt tooltip. Every bar prints its own value, so
+     colour is never the only channel carrying the number. */
+  function groupedBars(cfg) {
+    const {W, H, l, r, t, b} = cfg;
+    const pw = W - l - r, ph = H - t - b;
+    const gw = pw / cfg.groups.length;
+    const slot = gw * (cfg.slot || 0.72);
+    const bw = slot / cfg.series.length;
+    const by = v => t + (1 - Math.max(0, Math.min(v, cfg.yMax)) / cfg.yMax) * ph;
+    const gL = gi => l + gi * gw;
+    const bx = (gi, si) => gL(gi) + (gw - slot) / 2 + si * bw;
+    const geom = {W, H, l, r, t, b, pw, ph, gw, slot, bw, by, gL, bx};
+    const tips = [];
+
+    const grid = cfg.ticks.map(v => `
+      <line x1="${l}" x2="${l + pw}" y1="${by(v).toFixed(1)}" y2="${by(v).toFixed(1)}"
+            stroke="var(--grid)" stroke-width="1"/>
+      <text class="axis-t" x="${l - 8}" y="${(by(v) + 4).toFixed(1)}" text-anchor="end">${cfg.fmtTick(v)}</text>
+      ${cfg.fmtRight ? `<text class="axis-t" x="${l + pw + 9}" y="${(by(v) + 4).toFixed(1)}">${cfg.fmtRight(v)}</text>` : ""}`
+    ).join("");
+
+    let hi = "", bars = "", labs = "";
+    cfg.groups.forEach((g, gi) => {
+      if (g.hi) {
+        hi += `
+        <rect x="${(gL(gi) + 3).toFixed(1)}" y="${t - 24}" width="${(gw - 6).toFixed(1)}"
+              height="${(ph + 24).toFixed(1)}" rx="9" fill="${g.hi.fill}"
+              stroke="${g.hi.stroke}" stroke-width="1" stroke-dasharray="4 3"/>
+        <text class="axis-cap" x="${(gL(gi) + gw / 2).toFixed(1)}" y="${t - 10}"
+              text-anchor="middle" fill="${g.hi.stroke}">${esc(g.hi.label)}</text>`;
+      }
+      cfg.series.forEach((s, si) => {
+        const v = g.values[s.key];
+        const x = bx(gi, si), y = by(v), h = Math.max(2, t + ph - y);
+        bars += `
+        <rect x="${(x + 2).toFixed(1)}" y="${y.toFixed(1)}" width="${(bw - 4).toFixed(1)}"
+              height="${h.toFixed(1)}" rx="2" fill="${s.col}"/>
+        <text class="bar-v" x="${(x + bw / 2).toFixed(1)}" y="${(y - 5).toFixed(1)}"
+              text-anchor="middle" fill="${s.col}">${cfg.fmtVal(v)}</text>
+        <rect class="hb" data-tip="${tips.length}" x="${x.toFixed(1)}" y="${t}"
+              width="${bw.toFixed(1)}" height="${ph}" fill="transparent"/>`;
+        tips.push(`<div class="h">${esc(g.label)}${g.sub ? " · " + esc(g.sub) : ""}</div>
+          <div class="r"><span class="sw" style="background:${s.col}"></span>${esc(s.name)}
+            <span class="v">${cfg.fmtTip(v)}</span></div>`);
+      });
+      labs += cfg.groupLabel(g, gL(gi) + gw / 2, t + ph);
+    });
+
+    return {tips, svg: `
+      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(cfg.aria)}">
+        ${hi}${grid}
+        <line x1="${l}" x2="${l + pw}" y1="${t + ph}" y2="${t + ph}" stroke="var(--gridhi)" stroke-width="1"/>
+        <text class="axis-cap" x="${l}" y="15" fill="var(--ink3)">${esc(cfg.yCap)}</text>
+        ${bars}${labs}${cfg.extra ? cfg.extra(geom) : ""}
+      </svg>`};
+  }
+
+  /* Draw a grouped bar chart into a container and wire its tooltips. */
+  function drawBars(containerId, chart) {
+    const host = document.getElementById(containerId);
+    host.innerHTML = chart.svg;
+    const svg = host.querySelector("svg");
+    svg.querySelectorAll("rect.hb").forEach(rc => {
+      rc.addEventListener("mousemove",
+        e => showTT(chart.tips[+rc.dataset.tip], e.clientX, e.clientY));
+    });
+    svg.addEventListener("mouseleave", hideTT);
+  }
+
+  const barSwatch = (col, name) => `
+    <span class="li"><svg width="14" height="10" aria-hidden="true">
+      <rect width="14" height="10" rx="2" fill="${col}"/></svg>${name}</span>`;
+
+  /* Wrap a label into at most two lines for the SVG x-axis. */
+  const wrap2 = (s, max) => {
+    const out = [""];
+    s.split(" ").forEach(w => {
+      const cur = out[out.length - 1];
+      if (!cur) out[out.length - 1] = w;
+      else if ((cur + " " + w).length <= max) out[out.length - 1] = cur + " " + w;
+      else if (out.length < 2) out.push(w);
+      else out[1] += " " + w;
+    });
+    return out;
+  };
+
   /* Score dial: 240° gauge, threshold notches at 0.35 / 0.65 (operator policy). */
   function dialSVG(score, lvl) {
     const cx = 47, cy = 50, r = 35, a0 = -120, sweep = 240;
@@ -348,12 +493,24 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
 
   <section class="sec" aria-labelledby="sh1">
     <div class="sec-h"><span class="k">01</span><span class="t" id="sh1">Intake risk board</span>
-      <span class="s">click or press Enter on a card to chart it</span></div>
+      <span class="s">model confidence per intake · click or press Enter on a card to chart it in 04</span></div>
     <div class="cards" id="cards"></div>
   </section>
 
+  <section class="sec evsec" aria-labelledby="shB">
+    <div class="sec-h"><span class="k">02</span><span class="t" id="shB">Why standard algorithms fail here</span>
+      <span class="s">chlorophyll-a retrieval error by water regime · simulated</span></div>
+    <div id="bench-body"></div>
+  </section>
+
+  <section class="sec evsec" aria-labelledby="shA">
+    <div class="sec-h"><span class="k">03</span><span class="t" id="shA">Hyperspectral is the enabling sensor</span>
+      <span class="s">same MARSAD models, spectra degraded to each sensor · simulated</span></div>
+    <div id="abl-body"></div>
+  </section>
+
   <section class="sec" aria-labelledby="sh2">
-    <div class="sec-h"><span class="k">02</span><span class="t" id="sh2">Risk outlook</span>
+    <div class="sec-h"><span class="k">04</span><span class="t" id="sh2">Risk outlook</span>
       <span class="s">30-day history + 7-day forecast · risk index [0–1]</span></div>
     <div class="panel">
       <div class="tabs" role="tablist" aria-label="Select intake" id="tabs"></div>
@@ -369,7 +526,7 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
   </section>
 
   <section class="sec" aria-labelledby="sh3">
-    <div class="sec-h"><span class="k">03</span><span class="t" id="sh3">Stage-1 shallow-water correction</span>
+    <div class="sec-h"><span class="k">05</span><span class="t" id="sh3">Stage-1 shallow-water correction</span>
       <span class="s">example bloom pixel · 205 bands · 400–1700 nm</span></div>
     <div class="panel">
       <div class="p-h">
@@ -385,7 +542,7 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
   </section>
 
   <section class="sec" aria-labelledby="sh4">
-    <div class="sec-h"><span class="k">04</span><span class="t" id="sh4">Model metrics</span>
+    <div class="sec-h"><span class="k">06</span><span class="t" id="sh4">Model metrics</span>
       <span class="s">held-out synthetic pixels (training holdout)</span></div>
     <div class="metrics">
       <div class="tiles" id="tiles"></div>
@@ -404,13 +561,45 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
     <span>205-band simulated spectra · 400–1700 nm</span>
   </footer>`;
 
-  /* ---------- 01 · intake cards ---------- */
+  /* ---------- 01 · intake cards ----------
+     v0.2: each card also carries the ENSEMBLE model uncertainty for that
+     intake (uncertainty.EnsembleClassifier, averaged over its pixels).
+     It is reported only - by contract it never moves a risk level - and a
+     high total entropy raises an explicit analyst-review flag instead of
+     being auto-alerted. Older data.js files have no such block, so the
+     card degrades to a short "regenerate data.js" line. */
+  const uncBlock = it => {
+    const u = it.uncertainty;
+    if (!u || typeof u.confidence !== "number") {
+      return `<div class="unc"><div class="unc-h"><span class="ul">MODEL CONFIDENCE</span>
+        <span class="uv">n/a</span></div>
+        <div class="unc-na">not in this data.js - regenerate with scripts/run_demo.py</div></div>`;
+    }
+    const pct = Math.round(Math.max(0, Math.min(1, u.confidence)) * 100);
+    const num = v => (typeof v === "number" ? v : 0).toFixed(2);
+    return `
+      <div class="unc" title="Ensemble of bootstrapped Stage-2 classifiers on simulated spectra. Confidence is the mean top-class probability; total and epistemic are predictive entropies normalised to 0-1. Reported only: it never changes the risk level.">
+        <div class="unc-h"><span class="ul">MODEL CONFIDENCE</span>
+          <span class="uv">${u.confidence.toFixed(2)}</span></div>
+        <div class="ubar"><i style="width:${pct}%"></i></div>
+        <div class="unc-m">uncertainty total ${num(u.total)} · epistemic ${num(u.epistemic)}${
+          u.review_recommended ? "" : " · below review threshold"}</div>
+        ${u.review_recommended
+          ? `<div class="review"><span class="g" aria-hidden="true">&#9873;</span>ANALYST REVIEW RECOMMENDED</div>`
+          : ""}
+      </div>`;
+  };
+
   const cardsEl = document.getElementById("cards");
   cardsEl.innerHTML = intakes.map((it, i) => {
-    const t = trendOf(it), p = it.bloom.probs;
+    const t = trendOf(it), p = it.bloom.probs, u = it.uncertainty;
+    const aria = `${esc(it.name)}: ${it.risk.level}, risk ${it.risk.score.toFixed(2)}.` +
+      (u ? ` Model confidence ${u.confidence.toFixed(2)}.` +
+           (u.review_recommended ? " Analyst review recommended." : "") : "") +
+      ` Select to chart.`;
     return `
     <div class="card lvl-${it.risk.level}" role="button" tabindex="0" data-i="${i}"
-         aria-pressed="false" aria-label="${esc(it.name)}: ${it.risk.level}, risk ${it.risk.score.toFixed(2)}. Select to chart.">
+         aria-pressed="false" aria-label="${aria}">
       <div class="c-top">
         <div>
           <div class="c-name">${esc(it.name)}</div>
@@ -436,10 +625,11 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
         <span>P(cyano) <b>${p.cyanobacteria.toFixed(2)}</b></span>
       </div>
       <ul class="rationale">${it.risk.rationale.map(r => `<li>${esc(r)}</li>`).join("")}</ul>
+      ${uncBlock(it)}
     </div>`;
   }).join("");
 
-  /* ---------- 02 · tabs ---------- */
+  /* ---------- 04 · tabs ---------- */
   const tabsEl = document.getElementById("tabs");
   tabsEl.innerHTML = intakes.map((it, i) => `
     <button role="tab" id="tab-${i}" aria-selected="false" tabindex="-1" data-i="${i}">
@@ -458,7 +648,7 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
   };
   const hideTT = () => { tt.style.display = "none"; };
 
-  /* ---------- 02 · history + forecast chart ---------- */
+  /* ---------- 04 · history + forecast chart ---------- */
   const RC = {W: 960, H: 340, l: 46, r: 14, t: 30, b: 34};
   RC.pw = RC.W - RC.l - RC.r; RC.ph = RC.H - RC.t - RC.b;
   const rx = d => RC.l + (d + 29) / 36 * RC.pw;
@@ -576,7 +766,7 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
     else if (e.key === "End") { e.preventDefault(); selectIntake(n - 1, true); }
   });
 
-  /* ---------- 03 · spectra chart ---------- */
+  /* ---------- 05 · spectra chart ---------- */
   (function renderSpectra() {
     const S = D.spectra_example;
     const W = 960, H = 400, l = 50, r = 14, t = 56, b = 40;
@@ -650,7 +840,7 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
     svg.addEventListener("mouseleave", () => { cross.setAttribute("opacity", "0"); hideTT(); });
   })();
 
-  /* ---------- 04 · metric tiles + confusion matrix ---------- */
+  /* ---------- 06 · metric tiles + confusion matrix ---------- */
   document.getElementById("tiles").innerHTML = `
     <div class="tile">
       <div class="l">Stage-1 RMSE · corrected</div>
@@ -696,6 +886,303 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
         `<td style="color:var(--ink2);background:transparent">${(100 * row[ri] / tot).toFixed(1)}%</td></tr>`;
     });
     document.getElementById("cmx").innerHTML = html;
+  })();
+
+  /* ================= v0.2 evidence sections =================
+     Both read window.MARSAD_BENCHMARK (dashboard/benchmark.js, written by
+     scripts/run_benchmark.py). If that file is missing these two sections
+     show a "run the benchmark" notice and every other section still works. */
+
+  const benchNotice = id => {
+    document.getElementById(id).innerHTML = `
+      <div class="mini">
+        <h4>Benchmark evidence not loaded</h4>
+        <p>This section reads <code style="display:inline;padding:2px 7px;margin:0">dashboard/benchmark.js</code>,
+           which was not found next to this page. Generate it from the repo root:</p>
+        <code>python scripts/run_benchmark.py</code>
+        <p>then reload this page. Every other section works without it.</p>
+      </div>`;
+  };
+  const honestyBox = txt => `<div class="hn"><span class="k">HONESTY</span><span>${esc(txt)}</span></div>`;
+  const asFactor = v => Math.pow(10, v).toFixed(1);   // log10 error -> "off by a factor of"
+
+  /* ---------- 02 · why standard algorithms fail here ---------- */
+  const REGIMES = [
+    {key: "optically_deep", label: "Optically deep",   note: "clear open water"},
+    {key: "shallow_clear",  label: "Shallow, clear",   note: "bottom in view"},
+    {key: "turbid_deep",    label: "Turbid, deep",     note: "sediment loaded"},
+    {key: "shallow_turbid", label: "Shallow + turbid", note: "the Gulf-coast case"},
+  ];
+  const ALGOS = [
+    {key: "oc4",    name: "OC4 · NASA blue-green ratio",  col: "var(--s-oc4)"},
+    {key: "oc3m",   name: "OC3M · MODIS blue-green ratio", col: "var(--s-oc3m)"},
+    {key: "ndci",   name: "NDCI · red-edge index",         col: "var(--s-ndci)"},
+    {key: "marsad", name: "MARSAD 813 · Stage 1 + Stage 2", col: "var(--accent)"},
+  ];
+
+  (function renderBenchmark() {
+    if (!B || !B.chl_retrieval) { benchNotice("bench-body"); return; }
+    const CR = B.chl_retrieval, SP = B.speciation || {}, HD = B.headline || {};
+    const groups = REGIMES.filter(rg => CR[rg.key]).map(rg => ({
+      key: rg.key,
+      label: rg.label,
+      sub: `n = ${CR[rg.key].n} px · ${rg.note}`,
+      values: CR[rg.key],
+      hi: rg.key === "shallow_turbid"
+        ? {fill: "rgba(208,59,59,.13)", stroke: "var(--st-red)",
+           label: "TARGET REGIME · GULF-COAST INTAKES"}
+        : null,
+    }));
+    let vmax = 0;
+    groups.forEach(g => ALGOS.forEach(a => { vmax = Math.max(vmax, g.values[a.key] || 0); }));
+    const yMax = Math.max(0.5, Math.ceil(vmax * 1.12 / 0.25) * 0.25);
+    const ticks = [];
+    for (let v = 0; v <= yMax + 1e-9; v += 0.25) ticks.push(+v.toFixed(2));
+    const st = CR.shallow_turbid;
+
+    document.getElementById("bench-body").innerHTML = `
+      ${honestyBox(B.honesty_note || "Measured on our own physics-based forward model: a self-consistency check against a simulation, not validation on real scenes.")}
+      <div class="tiles" id="bench-tiles"></div>
+      <div class="panel">
+        <div class="p-h">
+          <span class="t">Median absolute log<sub>10</sub> error in retrieved chlorophyll-a</span>
+          <span class="legend" id="bench-legend"></span>
+        </div>
+        <div class="chart-wrap" id="benchchart"></div>
+        <div class="cap" id="bench-cap"></div>
+        <details class="tblv"><summary>View data table</summary>
+          <div class="scroll"><table class="dt" id="benchtable"></table></div>
+        </details>
+      </div>`;
+
+    document.getElementById("bench-tiles").innerHTML = `
+      <div class="tile">
+        <div class="l">OC4 error · optically deep</div>
+        <div class="v">${(HD.oc4_deep_err !== undefined ? HD.oc4_deep_err : CR.optically_deep.oc4).toFixed(2)}
+          <small>log₁₀</small></div>
+        <div class="d">chl off by a factor of
+          ${asFactor(HD.oc4_deep_err !== undefined ? HD.oc4_deep_err : CR.optically_deep.oc4)}</div>
+      </div>
+      <div class="tile">
+        <div class="l">OC4 error · shallow + turbid</div>
+        <div class="v">${(HD.oc4_shallow_turbid_err !== undefined ? HD.oc4_shallow_turbid_err : st.oc4).toFixed(2)}
+          <small>log₁₀</small></div>
+        <div class="d">chl off by a factor of
+          ${asFactor(HD.oc4_shallow_turbid_err !== undefined ? HD.oc4_shallow_turbid_err : st.oc4)}</div>
+      </div>
+      <div class="tile">
+        <div class="l">Speciation · shallow + turbid</div>
+        <div class="v">${(HD.marsad_shallow_turbid_acc * 100).toFixed(1)}<small>%</small></div>
+        <div class="d good">classical operator decision tree:
+          ${(HD.baseline_shallow_turbid_acc * 100).toFixed(1)}%</div>
+      </div>`;
+
+    document.getElementById("bench-legend").innerHTML =
+      ALGOS.map(a => barSwatch(a.col, a.name)).join("");
+
+    const chart = groupedBars({
+      W: 960, H: 372, l: 56, r: 74, t: 46, b: 52,
+      groups, series: ALGOS, yMax, ticks,
+      yCap: "MEDIAN |log₁₀| CHL ERROR · LOWER IS BETTER",
+      aria: "Grouped bars: median absolute log10 chlorophyll error for OC4, OC3M, NDCI and MARSAD 813 " +
+            "across four simulated water regimes. The shallow plus turbid regime is highlighted. " +
+            "Exact values are in the data table below the chart.",
+      fmtTick: v => v.toFixed(2),
+      fmtRight: v => "×" + asFactor(v),
+      fmtVal: v => v.toFixed(2),
+      fmtTip: v => v.toFixed(3) + " log₁₀ (factor " + asFactor(v) + ")",
+      groupLabel: (g, cx, yb) => `
+        <text class="grp-l${g.hi ? " hi" : ""}" x="${cx.toFixed(1)}" y="${yb + 21}"
+              text-anchor="middle">${g.hi ? "▲ " : ""}${esc(g.label)}</text>
+        <text class="grp-s" x="${cx.toFixed(1)}" y="${yb + 36}" text-anchor="middle">${esc(g.sub)}</text>`,
+      extra: G => {
+        let s = `<text class="axis-cap" x="${G.W - 6}" y="15" text-anchor="end"
+                       fill="var(--ink3)">SAME ERROR AS A FACTOR</text>`;
+        if (!st) return s;
+        const gi = groups.findIndex(g => g.key === "shallow_turbid");
+        const ym = G.by(st.marsad);
+        s += `
+          <line x1="${G.l}" x2="${G.l + G.pw}" y1="${ym.toFixed(1)}" y2="${ym.toFixed(1)}"
+                stroke="var(--accent)" stroke-width="1" stroke-dasharray="5 5" opacity=".75"/>
+          <text class="note-t" x="${G.l + 6}" y="${(ym - 6).toFixed(1)}" fill="var(--accent)">MARSAD 813 in shallow + turbid water: ${st.marsad.toFixed(2)} log₁₀, a factor of ${asFactor(st.marsad)}</text>`;
+        if (gi >= 0) {
+          const x = G.gL(gi) + G.gw - 13, y0 = G.by(st.oc4), y1 = ym, yc = (y0 + y1) / 2;
+          const ratio = st.oc4 / Math.max(st.marsad, 1e-9);
+          s += `
+            <line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${y0.toFixed(1)}" y2="${y1.toFixed(1)}"
+                  stroke="var(--st-red)" stroke-width="1.2"/>
+            <line x1="${(x - 4).toFixed(1)}" x2="${(x + 4).toFixed(1)}" y1="${y0.toFixed(1)}" y2="${y0.toFixed(1)}"
+                  stroke="var(--st-red)" stroke-width="1.2"/>
+            <line x1="${(x - 4).toFixed(1)}" x2="${(x + 4).toFixed(1)}" y1="${y1.toFixed(1)}" y2="${y1.toFixed(1)}"
+                  stroke="var(--st-red)" stroke-width="1.2"/>
+            <text class="note-t" transform="rotate(-90 ${(x - 8).toFixed(1)} ${yc.toFixed(1)})"
+                  x="${(x - 8).toFixed(1)}" y="${yc.toFixed(1)}" text-anchor="middle"
+                  fill="var(--st-red)">OC4 error ${ratio.toFixed(0)}× larger</text>`;
+        }
+        return s;
+      },
+    });
+    drawBars("benchchart", chart);
+
+    document.getElementById("bench-cap").innerHTML =
+      `<b>How to read this.</b> A median absolute log₁₀ error of 0.30 means the retrieved chlorophyll is off by a
+       factor of 2; 0.70 means a factor of 5. The right-hand axis prints that translation.
+       <b>What it does and does not show.</b> Every bar is measured on <code style="font-family:var(--mono)">marsad.synth</code>,
+       our own physics-based forward model of Gulf water, so this is a self-consistency check against a
+       simulation - consistent with the Case-2 water literature on band-ratio failure - and never independent
+       validation of how these algorithms behave on real Gulf scenes. Read the change between regimes rather
+       than the absolute level: the forward model is built to reproduce the optical structure of optically
+       complex coastal water, not to reproduce OC4's published open-ocean skill, so even the optically deep
+       column sits above OC4's real Case-1 performance. And MARSAD's retrieval is trained on the same forward
+       model that generated these test pixels, so part of its margin is structural, while OC4, OC3M and NDCI
+       run with their fixed published coefficients. The honest claim here is the shape of the failure, not the
+       size of the win.${B.generated_utc ? ` Benchmark generated <b>${esc(B.generated_utc)}</b>.` : ""}`;
+
+    document.getElementById("benchtable").innerHTML =
+      `<tr><th>water regime</th><th>n px</th><th>OC4</th><th>OC3M</th><th>NDCI</th><th>MARSAD</th>
+           <th>classical speciation</th><th>MARSAD speciation</th></tr>` +
+      groups.map(g => {
+        const sp = SP[g.key];
+        return `<tr><td>${esc(g.label)}</td><td>${g.values.n}</td>` +
+          ALGOS.map(a => `<td>${g.values[a.key].toFixed(3)}</td>`).join("") +
+          `<td>${sp ? (sp.baseline_tree * 100).toFixed(1) + "%" : "-"}</td>` +
+          `<td>${sp ? (sp.marsad * 100).toFixed(1) + "%" : "-"}</td></tr>`;
+      }).join("");
+  })();
+
+  /* ---------- 03 · hyperspectral is the enabling sensor ---------- */
+  (function renderAblation() {
+    if (!B || !B.ablation) { benchNotice("abl-body"); return; }
+    const AB = B.ablation, HD = B.headline || {};
+    // Which sensors actually carry a band on the 620 nm phycocyanin feature.
+    // Keys are fixed by docs/CONTRACTS-V2.md; the regex is only a fallback for
+    // a sensor added later.
+    const PC620 = {marsad_813: true, sentinel2_msi: false, sentinel3_olci: true,
+                   modis_aqua: false, landsat8_oli: false};
+    const has620 = k => (k in PC620) ? PC620[k] : !/\bno\b[^.]{0,40}620/i.test(AB[k].note || "");
+    const shortLabel = k => String(AB[k].label)
+      .replace(/ imaging spectrometer$/i, "").replace(/\s*\(.*\)\s*$/, "");
+    const keys = Object.keys(AB).sort((a, b) => AB[b].n_bands - AB[a].n_bands);
+    const SERIES = [
+      {key: "accuracy",     name: "Speciation accuracy",   col: "var(--s-true)"},
+      {key: "cyano_recall", name: "Cyanobacteria recall",  col: "var(--s-obs)"},
+    ];
+    const groups = keys.map(k => ({
+      key: k, label: shortLabel(k), sub: `${AB[k].n_bands} bands`,
+      nb: AB[k].n_bands, pc: has620(k), values: AB[k],
+      hi: k === "marsad_813"
+        ? {fill: "rgba(47,191,174,.10)", stroke: "var(--accent)", label: "THE 813 INSTRUMENT"}
+        : null,
+    }));
+    const m813 = AB.marsad_813;
+    const multi = keys.filter(k => k !== "marsad_813");
+    const worst620less = multi.filter(k => !has620(k))
+      .reduce((a, k) => (a === null || AB[k].cyano_recall < AB[a].cyano_recall ? k : a), null);
+    const bandsMin = multi.length ? Math.min(...multi.map(k => AB[k].n_bands)) : 0;
+    const bandsMax = multi.length ? Math.max(...multi.map(k => AB[k].n_bands)) : 0;
+
+    document.getElementById("abl-body").innerHTML = `
+      ${honestyBox(B.honesty_note || "Measured on our own physics-based forward model: a self-consistency check against a simulation, not validation on real scenes.")}
+      <div class="tiles" id="abl-tiles"></div>
+      <div class="panel">
+        <div class="p-h">
+          <span class="t">Speciation accuracy and cyanobacteria recall, by sensor</span>
+          <span class="legend" id="abl-legend"></span>
+        </div>
+        <div class="chart-wrap" id="ablchart"></div>
+        <div class="cap" id="abl-cap"></div>
+        <ul class="snotes" id="abl-notes"></ul>
+        <details class="tblv"><summary>View data table</summary>
+          <div class="scroll"><table class="dt" id="abltable"></table></div>
+        </details>
+      </div>`;
+
+    document.getElementById("abl-tiles").innerHTML = `
+      <div class="tile">
+        <div class="l">Hyperspectral gain</div>
+        <div class="v">${HD.hyperspectral_gain !== undefined
+          ? (HD.hyperspectral_gain >= 0 ? "+" : "−") + Math.abs(HD.hyperspectral_gain * 100).toFixed(1)
+          : "n/a"}<small> pts</small></div>
+        <div class="d">813 accuracy minus the best multispectral sensor - small on purpose, see the note below</div>
+      </div>
+      <div class="tile">
+        <div class="l">Cyanobacteria recall · 813</div>
+        <div class="v">${(m813.cyano_recall * 100).toFixed(1)}<small>%</small></div>
+        <div class="d">${worst620less
+          ? esc(shortLabel(worst620less)) + ", no 620 nm band: " +
+            (AB[worst620less].cyano_recall * 100).toFixed(1) + "%"
+          : "phycocyanin needs a band at 620 nm"}</div>
+      </div>
+      <div class="tile">
+        <div class="l">Contiguous bands</div>
+        <div class="v">${m813.n_bands}</div>
+        <div class="d">${bandsMin} to ${bandsMax} usable water bands on the multispectral sensors</div>
+      </div>`;
+
+    document.getElementById("abl-legend").innerHTML =
+      SERIES.map(s => barSwatch(s.col, s.name)).join("");
+
+    const chart = groupedBars({
+      W: 960, H: 396, l: 56, r: 18, t: 46, b: 84, slot: 0.56,
+      groups, series: SERIES, yMax: 1.06, ticks: [0, .2, .4, .6, .8, 1],
+      yCap: "SPECIATION ACCURACY / CYANOBACTERIA RECALL · HIGHER IS BETTER",
+      aria: "Grouped bars: speciation accuracy and cyanobacteria recall for the same MARSAD architecture " +
+            "retrained on spectra degraded to each sensor's band set, ordered by band count. " +
+            "Exact values are in the data table below the chart.",
+      fmtTick: v => (v * 100).toFixed(0) + "%",
+      fmtVal: v => (v * 100).toFixed(1),
+      fmtTip: v => (v * 100).toFixed(2) + "%",
+      groupLabel: (g, cx, yb) => {
+        const L = wrap2(g.label, 18);
+        const y2 = L[1] ? yb + 50 : yb + 36;
+        return `
+          <text class="grp-l${g.hi ? " hi2" : ""}" x="${cx.toFixed(1)}" y="${yb + 21}"
+                text-anchor="middle">${esc(L[0])}</text>
+          ${L[1] ? `<text class="grp-l${g.hi ? " hi2" : ""}" x="${cx.toFixed(1)}" y="${yb + 35}"
+                text-anchor="middle">${esc(L[1])}</text>` : ""}
+          <text class="grp-s" x="${cx.toFixed(1)}" y="${y2}" text-anchor="middle">${g.nb} bands</text>
+          <text class="grp-s grp-620 ${g.pc ? "yes" : "no"}" x="${cx.toFixed(1)}" y="${y2 + 15}"
+                text-anchor="middle">${g.pc ? "✓ 620 nm band" : "✗ no 620 nm band"}</text>`;
+      },
+      extra: G => {
+        const y = G.by(m813.cyano_recall);
+        return `
+          <line x1="${G.l}" x2="${G.l + G.pw}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}"
+                stroke="var(--s-obs)" stroke-width="1" stroke-dasharray="5 5" opacity=".7"/>
+          <text class="note-t" x="${G.l + G.pw - 4}" y="${(y - 6).toFixed(1)}" text-anchor="end"
+                fill="var(--s-obs)">813 cyanobacteria recall ${(m813.cyano_recall * 100).toFixed(1)}%</text>`;
+      },
+    });
+    drawBars("ablchart", chart);
+
+    document.getElementById("abl-cap").innerHTML =
+      `<b>Method.</b> The same MARSAD Stage-1 + Stage-2 architecture is retrained and evaluated once per
+       sensor. Observed spectra are resampled onto each sensor's real band set with Gaussian spectral
+       response functions, then interpolated back onto the 205-band grid, so every model sees an identical
+       array width and only the spectral <i>information</i> differs.
+       <b>The honest reading.</b> Sensors with no band on the 620 nm phycocyanin feature lose cyanobacteria
+       recall first and hardest, which is the class an operator most needs named. Sentinel-3 OLCI, the one
+       operational ocean-colour sensor that does carry a 620 nm band, lands within a fraction of a point of
+       the 205-band instrument here - and we are not going to hide that. What this per-pixel simulation
+       cannot show is the part that decides the real case: OLCI's single 10 nm band sits at 300 m ground
+       sampling, so one pixel covers about 9 hectares and has to separate phycocyanin absorption from
+       co-varying sediment and chlorophyll absorption inside it, while an intake-scale patch is smaller than
+       that pixel. Spatial sampling is not modelled here at all.
+       <b>Data basis.</b> All of it runs on <code style="font-family:var(--mono)">marsad.synth</code>, our own
+       physics-based forward model, so these are self-consistency checks against a simulation, never
+       independent validation on real Gulf scenes.`;
+
+    document.getElementById("abl-notes").innerHTML = keys.map(k => `
+      <li><b>${esc(AB[k].label)}</b>
+        <span class="tagpc ${has620(k) ? "yes" : "no"}">${has620(k) ? "620 nm band present" : "no 620 nm band"}</span>
+        <br>${esc(AB[k].note)}</li>`).join("");
+
+    document.getElementById("abltable").innerHTML =
+      `<tr><th>sensor</th><th>bands</th><th>620 nm</th><th>speciation accuracy</th><th>cyanobacteria recall</th></tr>` +
+      keys.map(k => `<tr><td>${esc(AB[k].label)}</td><td>${AB[k].n_bands}</td>
+        <td>${has620(k) ? "yes" : "no"}</td>
+        <td>${(AB[k].accuracy * 100).toFixed(2)}%</td>
+        <td>${(AB[k].cyano_recall * 100).toFixed(2)}%</td></tr>`).join("");
   })();
 
   /* ---------- boot ---------- */

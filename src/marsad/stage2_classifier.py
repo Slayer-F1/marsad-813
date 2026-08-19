@@ -157,7 +157,13 @@ class BloomClassifier:
         self._fitted = False
 
     # ------------------------------------------------------------------ fit
-    def fit(self, rrs: np.ndarray, labels: np.ndarray, chl: np.ndarray) -> "BloomClassifier":
+    def fit(
+        self,
+        rrs: np.ndarray,
+        labels: np.ndarray,
+        chl: np.ndarray,
+        sample_weight: np.ndarray | None = None,
+    ) -> "BloomClassifier":
         """Fit classifier and chl regressor on (corrected) Rrs spectra.
 
         Parameters
@@ -165,12 +171,27 @@ class BloomClassifier:
         rrs : (n, N_BANDS) remote-sensing reflectance.
         labels : (n,) ints in {0, 1, 2}.
         chl : (n,) chlorophyll-a in mg/m3 (regressed as log1p).
+        sample_weight : optional (n,) non-negative per-sample weights,
+            passed through to both boosting heads (the scaler step does
+            not take them). ``None`` keeps the plain unweighted fit.
+            :class:`marsad.uncertainty.EnsembleClassifier` uses this to
+            fit bootstrap resamples as integer multiplicities without
+            copying the spectra.
         """
         rrs = _as_spectra(rrs)
         labels = np.asarray(labels).astype(int).ravel()
         chl = np.asarray(chl, dtype=np.float64).ravel()
         if not (len(labels) == len(chl) == rrs.shape[0]):
             raise ValueError("rrs, labels and chl must have matching lengths")
+
+        clf_kwargs: dict = {}
+        reg_kwargs: dict = {}
+        if sample_weight is not None:
+            sample_weight = np.asarray(sample_weight, dtype=np.float64).ravel()
+            if sample_weight.shape[0] != rrs.shape[0]:
+                raise ValueError("sample_weight must have one entry per spectrum")
+            clf_kwargs["gbc__sample_weight"] = sample_weight
+            reg_kwargs["gbr__sample_weight"] = sample_weight
 
         X = engineer_features(rrs)
 
@@ -181,9 +202,9 @@ class BloomClassifier:
             self._single_class = int(seen[0])
         else:
             self._single_class = None
-            self._clf.fit(X, labels)
+            self._clf.fit(X, labels, **clf_kwargs)
 
-        self._reg.fit(X, np.log1p(np.clip(chl, 0.0, None)))
+        self._reg.fit(X, np.log1p(np.clip(chl, 0.0, None)), **reg_kwargs)
         self._fitted = True
         return self
 

@@ -1,18 +1,50 @@
 """Smoke test for the end-to-end pipeline (src/marsad/pipeline.py).
 
 Runs the full flow with tiny sample counts and asserts the two output files
-exist and follow EXACTLY the docs/CONTRACTS.md schema. Model quality is
+exist and follow EXACTLY the docs/CONTRACTS.md + docs/CONTRACTS-V2.md schema
+(including the v0.2 per-intake ``uncertainty`` block). Model quality is
 asserted in the per-stage tests, not here.
+
+The one exception is ``test_demo_story_seed7``, which runs at the full
+``run_demo.py`` sizes because it pins the judge-facing narrative; it dominates
+this file's wall clock and there is no smaller run that can pin the same story.
 """
 from __future__ import annotations
 
 import json
 
+import joblib
+
+from marsad import pipeline
 from marsad.pipeline import HORIZON_DAYS, INTAKES, run_end_to_end
 from marsad.spectra import N_BANDS
 
 PREFIX = "window.MARSAD_DATA = "
 HISTORY_DAYS = 12  # small but > 8 so the 7-day trend lookback is exercised
+
+INTAKE_KEYS = {"name", "lat", "lon", "kind", "risk", "bloom", "uncertainty",
+               "history", "forecast"}
+UNCERTAINTY_KEYS = {"total", "epistemic", "confidence", "review_recommended"}
+
+# pipeline._ROUND_DP = 4, so a rounded difference can move by at most 1e-4;
+# the ordering assertions below carry that slack rather than a bare epsilon.
+ROUND_SLACK = 2e-4
+
+# Sizes for the cache tests: as small as the pipeline tolerates, because each
+# cold run pays for a full Stage 1 + Stage 2 + ensemble fit.
+CACHE_N_TRAIN = 150
+CACHE_N_SCENE = 80
+CACHE_HISTORY_DAYS = 5
+
+
+def _without_timestamp(data: dict) -> dict:
+    """The payload minus ``generated_utc``, which is wall-clock by design."""
+    return {k: v for k, v in data.items() if k != "generated_utc"}
+
+
+def _canonical(data: dict) -> str:
+    """Byte-comparable rendering of a results payload (timestamp removed)."""
+    return json.dumps(_without_timestamp(data), sort_keys=True)
 
 
 def test_run_end_to_end_smoke(tmp_path):
@@ -50,6 +82,8 @@ def test_run_end_to_end_smoke(tmp_path):
     assert [i["name"] for i in data["intakes"]] == [i["name"] for i in INTAKES]
 
     for intake in data["intakes"]:
+        assert set(intake) == INTAKE_KEYS
+
         risk = intake["risk"]
         assert risk["level"] in {"GREEN", "AMBER", "RED"}
         assert 0.0 <= risk["score"] <= 1.0
@@ -58,6 +92,21 @@ def test_run_end_to_end_smoke(tmp_path):
         probs = intake["bloom"]["probs"]
         assert set(probs) == {"no_bloom", "dinoflagellate", "cyanobacteria"}
         assert intake["bloom"]["dominant"] in probs
+
+        # v0.2 per-intake uncertainty block (docs/CONTRACTS-V2.md fix 1).
+        unc = intake["uncertainty"]
+        assert set(unc) == UNCERTAINTY_KEYS
+        # Entropies are normalised by log(3), so both live in [0, 1].
+        assert 0.0 <= unc["total"] <= 1.0
+        assert 0.0 <= unc["epistemic"] <= 1.0
+        # Mutual information can never exceed the predictive entropy it is
+        # decomposed out of, and averaging over pixels preserves that.
+        assert unc["epistemic"] <= unc["total"] + ROUND_SLACK
+        # Top-class probability over 3 classes: at worst uniform (1/3).
+        assert 1.0 / 3.0 - ROUND_SLACK <= unc["confidence"] <= 1.0
+        # Must survive JSON as a real boolean, not as 1/0 (bool subclasses
+        # int in Python, so this is a live failure mode for the rounder).
+        assert isinstance(unc["review_recommended"], bool)
 
         history = intake["history"]
         assert len(history) == HISTORY_DAYS
@@ -82,6 +131,9 @@ def test_run_end_to_end_smoke(tmp_path):
     assert (len(ex["wavelength_nm"]) == len(ex["observed"])
             == len(ex["corrected"]) == len(ex["true"]) == N_BANDS)
 
+    # --- review_recommended is serialised as a JS boolean, not 1/0 --------
+    assert '"review_recommended": true' in raw or '"review_recommended": false' in raw
+
 
 def test_run_end_to_end_history_days_one(tmp_path):
     """Regression: history_days=1 used to crash with IndexError in the
@@ -91,6 +143,95 @@ def test_run_end_to_end_history_days_one(tmp_path):
     for intake in result["intakes"]:
         assert len(intake["history"]) == 1
         assert intake["history"][0]["day"] == 0
+
+
+def test_model_cache_rejects_junk(tmp_path):
+    """A missing, corrupt, foreign or stale artefact must be a MISS.
+
+    The cache is an optimisation; it must never be able to crash a demo run
+    or, worse, hand back models that were fitted for a different key.
+    """
+    path = pipeline._cache_path(tmp_path, seed=3, n_train=CACHE_N_TRAIN)
+
+    # (a) nothing there yet
+    assert pipeline._load_model_cache(path, 3, CACHE_N_TRAIN) is None
+
+    # (b) not a joblib file at all
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"this is not a joblib artefact")
+    assert pipeline._load_model_cache(path, 3, CACHE_N_TRAIN) is None
+
+    # (c) a joblib file holding something else entirely
+    joblib.dump({"hello": "world"}, path)
+    assert pipeline._load_model_cache(path, 3, CACHE_N_TRAIN) is None
+
+    # (d) right shape, wrong signature (stale recipe / other key)
+    joblib.dump({
+        "signature": pipeline._cache_signature(3, CACHE_N_TRAIN + 1),
+        "corrector": None, "classifier": None, "ensemble": None,
+        "stage1_metrics": {}, "stage2_metrics": {},
+    }, path)
+    assert pipeline._load_model_cache(path, 3, CACHE_N_TRAIN) is None
+
+    # (e) right signature, but the payload does not hold real estimators
+    joblib.dump({
+        "signature": pipeline._cache_signature(3, CACHE_N_TRAIN),
+        "corrector": None, "classifier": None, "ensemble": None,
+        "stage1_metrics": {}, "stage2_metrics": {},
+    }, path)
+    assert pipeline._load_model_cache(path, 3, CACHE_N_TRAIN) is None
+
+
+def test_model_cache_is_transparent(tmp_path, monkeypatch):
+    """Caching changes the wall clock and nothing else.
+
+    Checks, in one test so the (expensive) fits are paid for as few times as
+    possible, that for a fixed seed:
+
+    1. a cold cached run equals an uncached run byte for byte,
+    2. a warm run reading the artefact equals both,
+    3. the artefact really is what the warm run read (poison it and the
+       poison shows up), and
+    4. ``refit=True`` ignores the artefact and rewrites it.
+
+    The ensemble is shrunk to two members for the duration: this test is
+    about the cache being transparent, which is independent of how many
+    members the artefact happens to hold, and member fitting is most of the
+    cost of the three cold runs below.
+    """
+    monkeypatch.setattr(pipeline, "ENSEMBLE_MEMBERS", 2)
+    kwargs = dict(seed=3, n_train=CACHE_N_TRAIN, n_scene=CACHE_N_SCENE,
+                  history_days=CACHE_HISTORY_DAYS)
+    cache_dir = tmp_path / "model-cache"
+    path = pipeline._cache_path(cache_dir, seed=3, n_train=CACHE_N_TRAIN)
+
+    # 1. no cache at all, then a cold run that populates the cache.
+    reference = run_end_to_end(outdir=tmp_path / "nocache", **kwargs)
+    cold = run_end_to_end(outdir=tmp_path / "cold", cache_dir=cache_dir, **kwargs)
+    assert path.is_file()
+    assert _canonical(cold) == _canonical(reference)
+
+    # 2. warm run: same numbers, straight out of the artefact.
+    warm = run_end_to_end(outdir=tmp_path / "warm", cache_dir=cache_dir, **kwargs)
+    assert _canonical(warm) == _canonical(reference)
+
+    # 3. prove the warm run really read the artefact rather than silently
+    #    refitting: mark the stored holdout accuracy and watch it come back.
+    payload = joblib.load(path)
+    payload["stage2_metrics"]["accuracy"] = -1.0
+    joblib.dump(payload, path)
+    poisoned = run_end_to_end(outdir=tmp_path / "poisoned", cache_dir=cache_dir,
+                              **kwargs)
+    assert poisoned["model_metrics"]["stage2_accuracy"] == -1.0
+
+    # 4. refit=True ignores the marked artefact and overwrites it, so both
+    #    this run and the next warm run are back on the reference numbers.
+    refitted = run_end_to_end(outdir=tmp_path / "refit", cache_dir=cache_dir,
+                              refit=True, **kwargs)
+    assert _canonical(refitted) == _canonical(reference)
+    rewarmed = run_end_to_end(outdir=tmp_path / "rewarm", cache_dir=cache_dir,
+                              **kwargs)
+    assert _canonical(rewarmed) == _canonical(reference)
 
 
 def test_demo_story_seed7(tmp_path):

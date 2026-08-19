@@ -19,6 +19,29 @@ Flow (see docs/CONTRACTS.md, section "pipeline.py"):
 6. Write ``outputs/results.json`` and ``dashboard/data.js`` with EXACTLY the
    schema in docs/CONTRACTS.md.
 
+Per-intake uncertainty
+----------------------
+A bagged :class:`marsad.uncertainty.EnsembleClassifier` is fitted alongside the
+deployed Stage 2 model on exactly the same corrected training spectra, and
+every intake record carries an ``"uncertainty"`` block aggregated over that
+intake's pixels. The ensemble is an *instrument*, not a replacement: the risk
+numbers still come from the single deployed :class:`BloomClassifier`, because
+the figure an operator acts on has to come from the model that is actually in
+production, and swapping in the ensemble mean would silently move every
+pinned demo number without improving the physics.
+
+Scientific honesty (binding, see docs/CONTRACTS-V2.md)
+------------------------------------------------------
+Everything here runs on ``marsad.synth``, our own physics-based forward model
+of Gulf Case-2 water. Every metric this module reports - Stage 1 RMSE, Stage 2
+accuracy, the uncertainty block - is therefore a self-consistency check
+against a simulation, never independent validation of real Gulf water. In
+particular the ensemble is confident almost everywhere on this data precisely
+because the test pixels come from the same generator the members were trained
+on; that is a property of the simulation, not evidence that MARSAD is
+calibrated on real water. Real validation is the hindcast on documented events
+once GLORIA/PACE/813 scenes land.
+
 Geometry placeholders
 ---------------------
 The synthetic scene has no map projection, so two quantities that in operations
@@ -34,10 +57,12 @@ documented as placeholders:
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import joblib
 import numpy as np
 
 from . import synth
@@ -46,6 +71,7 @@ from .spectra import BAND_GRID
 from .stage1_correction import ShallowWaterCorrector
 from .stage2_classifier import BloomClassifier
 from .stage3_forecast import DriftForecaster
+from .uncertainty import REVIEW_THRESHOLD, EnsembleClassifier, review_queue
 
 # Monitored assets (contract-fixed). Three Gulf of Oman / Gulf coast
 # desalination intakes plus one inland reservoir.
@@ -78,9 +104,99 @@ HOLDOUT_FRACTION = 0.25   # fraction of the training set held out for metrics
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _ROUND_DP = 4             # keep results.json / data.js small
 
+# Members of the uncertainty ensemble fitted alongside Stage 2. Five is the
+# contract default of :class:`marsad.uncertainty.EnsembleClassifier`: the
+# epistemic term is a disagreement estimate ACROSS members, so three members
+# make it visibly noisy. Fitting them is roughly half of a cold run's wall
+# clock (measured: full demo about 40-75 s cold, about 3 s warm), which is
+# exactly why the model cache below exists - the price is paid once.
+ENSEMBLE_MEMBERS = 5
+
+# ---------------------------------------------------------------------------
+# Model cache
+# ---------------------------------------------------------------------------
+# Fitting Stage 1, Stage 2 and the uncertainty ensemble is essentially the
+# entire cost of a run; everything downstream of it is milliseconds. The cache
+# is keyed by ``(seed, n_train)`` because those two numbers fully determine the
+# training set, the fit/holdout split and every estimator seed derived from
+# them - so a cache hit holds exactly the estimators a refit would produce and
+# the run's results are bit-identical either way. ``_CACHE_VERSION`` and the
+# rest of the stored signature fingerprint the training *recipe* as well, so
+# changing the holdout fraction, the ensemble size or the payload layout
+# invalidates old artefacts instead of silently reusing them.
+_CACHE_VERSION = 1
+_CACHE_FIELDS = frozenset(
+    {"signature", "corrector", "classifier", "ensemble",
+     "stage1_metrics", "stage2_metrics"}
+)
+
+
+def _cache_signature(seed: int, n_train: int) -> dict:
+    """Everything that must match for a cached artefact to be reusable."""
+    return {
+        "cache_version": _CACHE_VERSION,
+        "seed": int(seed),
+        "n_train": int(n_train),
+        "holdout_fraction": float(HOLDOUT_FRACTION),
+        "ensemble_members": int(ENSEMBLE_MEMBERS),
+    }
+
+
+def _cache_path(cache_dir, seed: int, n_train: int) -> Path:
+    """Artefact path for one ``(seed, n_train)`` key inside ``cache_dir``."""
+    return Path(cache_dir) / f"models_seed{int(seed)}_n{int(n_train)}.joblib"
+
+
+def _load_model_cache(path: Path, seed: int, n_train: int) -> dict | None:
+    """Return a valid cached payload, or ``None`` for any kind of miss.
+
+    A missing, corrupt, foreign or stale artefact is a miss, never an
+    exception: the cache is an optimisation and must never be able to break a
+    demo run five minutes before a hackathon presentation.
+    """
+    if not path.is_file():
+        return None
+    try:
+        payload = joblib.load(path)
+    except Exception:  # unreadable / truncated / not a joblib file
+        return None
+    if not isinstance(payload, dict) or not _CACHE_FIELDS <= set(payload):
+        return None
+    if payload["signature"] != _cache_signature(seed, n_train):
+        return None
+    if not isinstance(payload["corrector"], ShallowWaterCorrector):
+        return None
+    if not isinstance(payload["classifier"], BloomClassifier):
+        return None
+    if not isinstance(payload["ensemble"], EnsembleClassifier):
+        return None
+    return payload
+
+
+def _store_model_cache(path: Path, payload: dict) -> None:
+    """Write a cache payload atomically (temp file + ``os.replace``).
+
+    Atomic because two demo runs sharing a cache directory would otherwise be
+    able to leave a half-written artefact behind, which the next run would
+    read as a corrupt file.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        joblib.dump(payload, tmp)
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():  # dump failed part-way through
+            tmp.unlink(missing_ok=True)
+
 
 def _round(obj: Any, ndigits: int = _ROUND_DP) -> Any:
     """Recursively round floats (and coerce numpy scalars) for JSON output."""
+    # bool BEFORE int: bool subclasses int in Python and np.bool_ matches
+    # neither, so without this branch ``review_recommended`` would serialise
+    # as 1/0 instead of true/false and break the dashboard schema.
+    if isinstance(obj, (bool, np.bool_)):
+        return bool(obj)
     if isinstance(obj, (float, np.floating)):
         return round(float(obj), ndigits)
     if isinstance(obj, (int, np.integer)):
@@ -148,7 +264,8 @@ def _assign_intake_pixels(labels: np.ndarray, rng: np.random.Generator) -> list[
 
 
 def run_end_to_end(seed: int = 7, outdir=None, n_train: int = 4000,
-                   n_scene: int = 1200, history_days: int = 30) -> dict:
+                   n_scene: int = 1200, history_days: int = 30,
+                   cache_dir=None, refit: bool = False) -> dict:
     """Train the full pipeline, assess every intake, and write the outputs.
 
     Parameters
@@ -157,39 +274,86 @@ def run_end_to_end(seed: int = 7, outdir=None, n_train: int = 4000,
     outdir : base directory for ``outputs/`` and ``dashboard/``; defaults to
         the repository root so ``dashboard/index.html`` finds ``data.js``.
     n_train, n_scene, history_days : sizes, reduced by tests/--fast for speed.
+    cache_dir : optional directory for the fitted Stage 1 + Stage 2 + ensemble
+        artefacts, keyed by ``(seed, n_train)``. A hit skips the whole training
+        phase, which is where a run spends essentially all of its wall clock.
+        Because the key fixes the training set and every estimator seed, a
+        cached run produces bit-identical results to a fresh one.
+    refit : ignore any cached artefact and retrain (the refreshed models are
+        written back to ``cache_dir`` if one was given). Use it after touching
+        anything the cache signature does not fingerprint, e.g. the synthetic
+        forward model or a stage's own hyper-parameters.
 
     Returns
     -------
     dict with exactly the ``dashboard/data.js`` schema of docs/CONTRACTS.md
     (also serialised verbatim to ``outputs/results.json``).
     """
-    rng = np.random.default_rng(seed)
+    # --- 1-3. training: Stage 1, Stage 2 and the uncertainty ensemble -----
+    cache_path = _cache_path(cache_dir, seed, n_train) if cache_dir is not None else None
+    cached = None if (cache_path is None or refit) else _load_model_cache(
+        cache_path, seed, n_train)
 
-    # --- 1. training data + fit/holdout split -----------------------------
-    train = synth.generate_dataset(n_train, seed=seed)
-    n_hold = max(1, int(round(n_train * HOLDOUT_FRACTION)))
-    perm = rng.permutation(n_train)
-    hold_idx, fit_idx = perm[:n_hold], perm[n_hold:]
+    if cached is not None:
+        corrector = cached["corrector"]
+        classifier = cached["classifier"]
+        ensemble = cached["ensemble"]
+        # Holdout metrics are cached rather than recomputed: the holdout split
+        # is a pure function of (seed, n_train), so the stored numbers ARE the
+        # numbers a refit would report, and reusing them keeps the cached path
+        # from regenerating the training set just to re-score it.
+        stage1_metrics = dict(cached["stage1_metrics"])
+        stage2_metrics = dict(cached["stage2_metrics"])
+    else:
+        rng = np.random.default_rng(seed)
 
-    # --- 2. Stage 1: learned shallow-water correction ---------------------
-    corrector = ShallowWaterCorrector(seed=seed)
-    corrector.fit(train.rrs_observed[fit_idx], train.rrs_true[fit_idx])
-    stage1_metrics = corrector.score(train.rrs_observed[hold_idx], train.rrs_true[hold_idx])
+        # --- 1. training data + fit/holdout split -------------------------
+        train = synth.generate_dataset(n_train, seed=seed)
+        n_hold = max(1, int(round(n_train * HOLDOUT_FRACTION)))
+        perm = rng.permutation(n_train)
+        hold_idx, fit_idx = perm[:n_hold], perm[n_hold:]
 
-    # --- 3. Stage 2: bloom classifier, trained on CORRECTED spectra -------
-    # Rationale: in operations the classifier only ever sees Stage-1 output,
-    # so training on corrected spectra keeps train/serve distributions aligned.
-    corrected_fit = corrector.transform(train.rrs_observed[fit_idx])
-    classifier = BloomClassifier(seed=seed)
-    classifier.fit(corrected_fit, train.labels[fit_idx], train.chl[fit_idx])
-    corrected_hold = corrector.transform(train.rrs_observed[hold_idx])
-    stage2_metrics = classifier.evaluate(corrected_hold, train.labels[hold_idx])
+        # --- 2. Stage 1: learned shallow-water correction -----------------
+        corrector = ShallowWaterCorrector(seed=seed)
+        corrector.fit(train.rrs_observed[fit_idx], train.rrs_true[fit_idx])
+        stage1_metrics = corrector.score(train.rrs_observed[hold_idx],
+                                         train.rrs_true[hold_idx])
+
+        # --- 3. Stage 2: bloom classifier, trained on CORRECTED spectra ---
+        # Rationale: in operations the classifier only ever sees Stage-1
+        # output, so training on corrected spectra keeps the train and serve
+        # distributions aligned.
+        corrected_fit = corrector.transform(train.rrs_observed[fit_idx])
+        classifier = BloomClassifier(seed=seed)
+        classifier.fit(corrected_fit, train.labels[fit_idx], train.chl[fit_idx])
+        corrected_hold = corrector.transform(train.rrs_observed[hold_idx])
+        stage2_metrics = classifier.evaluate(corrected_hold, train.labels[hold_idx])
+
+        # --- 3b. uncertainty ensemble, same corrected training spectra ----
+        # Bagged copies of the SAME architecture on bootstrap resamples of the
+        # SAME data, so member disagreement measures what MARSAD has not been
+        # shown rather than an architecture difference.
+        ensemble = EnsembleClassifier(n_members=ENSEMBLE_MEMBERS, seed=seed)
+        ensemble.fit(corrected_fit, train.labels[fit_idx], train.chl[fit_idx])
+
+        if cache_path is not None:
+            _store_model_cache(cache_path, {
+                "signature": _cache_signature(seed, n_train),
+                "corrector": corrector,
+                "classifier": classifier,
+                "ensemble": ensemble,
+                "stage1_metrics": dict(stage1_metrics),
+                "stage2_metrics": dict(stage2_metrics),
+            })
 
     # --- 4. fresh scene -> correct -> classify ----------------------------
     scene = synth.generate_dataset(n_scene, seed=seed + 1)
     scene_corrected = corrector.transform(scene.rrs_observed)
     probs_all = classifier.predict_proba(scene_corrected)
     chl_all = classifier.estimate_chl(scene_corrected)
+    # Per-pixel uncertainty decomposition from the ensemble, evaluated once
+    # for the whole scene and then aggregated per intake below.
+    scene_unc = ensemble.uncertainty(scene_corrected)
 
     assign_rng = np.random.default_rng(seed + 2)
     pixel_sets = _assign_intake_pixels(scene.labels, assign_rng)
@@ -283,6 +447,21 @@ def run_end_to_end(seed: int = 7, outdir=None, n_train: int = 4000,
                                              seed=hist_seed)
             fc = forecaster.forecast(history, drift_toward_intake_kmday=drift_toward_intake_kmday)
 
+        # -- per-intake model uncertainty (ensemble, aggregated) -----------
+        # The unit of operator action is the asset, not the pixel, so the
+        # ensemble's per-pixel decomposition is averaged over the intake's
+        # slice. Mean-then-threshold is deliberate: a handful of hopeless
+        # pixels must not send an otherwise clear intake to a human analyst,
+        # while broad mild ambiguity across the whole slice - the signature of
+        # water the ensemble has genuinely not been trained on - should.
+        # Averaging preserves ``epistemic <= total`` because it holds per pixel.
+        unc_mean = {key: float(np.mean(scene_unc[key][pixels]))
+                    for key in ("total", "epistemic", "confidence")}
+        review_recommended = bool(
+            review_queue({"total": np.array([unc_mean["total"]])},
+                         threshold=REVIEW_THRESHOLD)[0]
+        )
+
         intakes_out.append({
             "name": intake["name"],
             "lat": intake["lat"],
@@ -301,6 +480,16 @@ def run_end_to_end(seed: int = 7, outdir=None, n_train: int = 4000,
                 },
                 "dominant": dominant,
                 "chl_mg_m3": chl,
+            },
+            # MODEL uncertainty from the bagged ensemble, distinct from the
+            # ASSESSMENT uncertainty fed to risk.compute_risk_index above
+            # (which is classifier ambiguity vs forecast band width). This
+            # block is reported, never used to downgrade a level.
+            "uncertainty": {
+                "total": unc_mean["total"],
+                "epistemic": unc_mean["epistemic"],
+                "confidence": unc_mean["confidence"],
+                "review_recommended": review_recommended,
             },
             "history": [
                 {"day": int(d - (history_days - 1)), "score": float(s)}
