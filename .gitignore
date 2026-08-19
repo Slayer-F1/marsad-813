@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Environments
+.venv/
+venv/
+env/
+
+# Trained model artifacts (regenerate with scripts/run_demo.py)
+*.joblib
+models/
+
+# Fast-preview runs are throwaway; the committed dashboard/data.js must
+# only ever come from a full run (see scripts/run_demo.py --fast).
+outputs/fast-preview/
+
+# Real satellite/in-situ data is large and licensed — never commit it.
+# Fetch with scripts/download_gloria.py instead.
+data/raw/
+data/cache/
+*.nc
+*.he5
+*.tif
+*.tiff
+*.zip
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MARSAD 813 — HAB Early Warning</title>
+<style>
+/* ================= MARSAD 813 control-room theme =================
+   Committed dark ops-room design (deep navy water palette).
+   Chart series (validated for CVD + contrast on this surface):
+     observed #d95926 · corrected #199e70 · true #3987e5
+   Status colors are reserved and always paired with a text label
+   and a shape glyph — never color alone.                          */
+:root{
+  color-scheme: dark;
+  --bg:        #060b14;
+  --panel:     #0e1a2b;
+  --panel2:    #13233a;
+  --border:    rgba(148,184,220,.14);
+  --ink:       #e9f1f9;
+  --ink2:      #a7bccf;
+  --ink3:      #6d8299;
+  --grid:      #1b2c42;
+  --gridhi:    #2a4260;
+  --accent:    #2fbfae;
+  --s-obs:     #d95926;
+  --s-cor:     #199e70;
+  --s-true:    #3987e5;
+  --st-green:  #0ca30c;
+  --st-amber:  #fab219;
+  --st-red:    #d03b3b;
+  --mono: ui-monospace,"Cascadia Mono",Consolas,"SF Mono",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scrollbar-gutter:stable}
+body{
+  background:
+    radial-gradient(1100px 500px at 75% -10%, rgba(47,191,174,.07), transparent 60%),
+    radial-gradient(900px 600px at -10% 110%, rgba(57,135,229,.06), transparent 60%),
+    var(--bg);
+  color:var(--ink);
+  font:14px/1.45 -apple-system,"Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;
+  min-height:100vh;
+}
+a{color:var(--accent)}
+.wrap{max-width:1180px;margin:0 auto;padding:18px 20px 40px}
+.topbar{height:3px;background:linear-gradient(90deg,var(--accent),var(--s-true) 45%,transparent 90%)}
+
+/* ---------- header ---------- */
+header.hd{display:flex;flex-wrap:wrap;gap:16px 28px;align-items:center;justify-content:space-between;padding:14px 0 18px}
+.brand{display:flex;gap:14px;align-items:center}
+.brand .mark{flex:none}
+.brand h1{font-size:21px;letter-spacing:.10em;font-weight:700}
+.brand h1 .n813{color:var(--accent);font-weight:600}
+.brand .sub{color:var(--ink2);font-size:12.5px;margin-top:2px}
+.brand .sub .ar{font-size:14px;color:var(--accent);letter-spacing:0}
+.hd-right{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.hd-meta{display:flex;flex-direction:column;gap:5px;align-items:flex-end}
+.stamp{font-family:var(--mono);font-size:11.5px;color:var(--ink3)}
+.stamp b{color:var(--ink2);font-weight:600}
+.badge-syn{font-size:10.5px;letter-spacing:.09em;font-weight:700;color:var(--st-amber);
+  border:1px solid rgba(250,178,25,.45);border-radius:4px;padding:3px 8px;background:rgba(250,178,25,.08)}
+.sys{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--border);
+  border-radius:10px;padding:8px 14px}
+.sys .lbl{font-size:10.5px;letter-spacing:.12em;color:var(--ink3);font-weight:700}
+.sys .counts{font-size:12px;color:var(--ink2);font-family:var(--mono)}
+
+/* ---------- status chips (label + shape glyph, never color alone) ---------- */
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.07em;
+  border-radius:999px;padding:3px 10px;border:1px solid;color:var(--ink)}
+.chip .g{font-size:10px;line-height:1}
+.chip.GREEN{border-color:rgba(12,163,12,.55);background:rgba(12,163,12,.12)}
+.chip.GREEN .g{color:var(--st-green)}
+.chip.AMBER{border-color:rgba(250,178,25,.55);background:rgba(250,178,25,.10)}
+.chip.AMBER .g{color:var(--st-amber)}
+.chip.RED{border-color:rgba(208,59,59,.60);background:rgba(208,59,59,.14)}
+.chip.RED .g{color:var(--st-red)}
+
+/* ---------- sections ---------- */
+.sec{margin-top:26px}
+.sec-h{display:flex;align-items:baseline;gap:12px;margin-bottom:12px}
+.sec-h .k{font-size:11px;letter-spacing:.16em;font-weight:700;color:var(--accent)}
+.sec-h .t{font-size:15px;font-weight:650;color:var(--ink)}
+.sec-h .s{font-size:12px;color:var(--ink3)}
+.sec-h::after{content:"";flex:1;height:1px;background:var(--border);align-self:center}
+
+/* ---------- intake cards ---------- */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(262px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;
+  cursor:pointer;transition:border-color .15s, transform .15s;position:relative}
+.card:hover{border-color:rgba(148,184,220,.34)}
+.card:focus-visible{outline:2px solid #4da3ff;outline-offset:2px}
+.card.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.card.selected::after{content:"CHARTED";position:absolute;top:-8px;right:12px;font-size:9px;
+  letter-spacing:.12em;font-weight:700;color:#04211c;background:var(--accent);border-radius:3px;padding:2px 6px}
+.card.lvl-RED{box-shadow:0 0 22px rgba(208,59,59,.10)}
+.card.lvl-RED.selected{box-shadow:0 0 0 1px var(--accent) inset,0 0 22px rgba(208,59,59,.10)}
+.c-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.c-name{font-size:16px;font-weight:700}
+.c-kind{display:flex;align-items:center;gap:6px;color:var(--ink3);font-size:10.5px;letter-spacing:.08em;
+  font-weight:600;margin-top:3px}
+.c-kind svg{flex:none}
+.c-geo{font-family:var(--mono);font-size:10.5px;color:var(--ink3);margin-top:2px}
+.c-mid{display:flex;gap:14px;align-items:center;margin:10px 0 4px}
+.c-facts{display:grid;gap:5px;font-size:12.5px;min-width:0}
+.c-facts .fl{color:var(--ink3);font-size:10.5px;letter-spacing:.08em;font-weight:600}
+.c-facts .fv{color:var(--ink);font-weight:600}
+.c-facts .fv small{color:var(--ink2);font-weight:400}
+.trend{font-size:12px;font-weight:600}
+.trend.up{color:var(--st-red)} .trend.dn{color:var(--st-green)} .trend.fl{color:var(--ink2)}
+.probs{display:flex;flex-wrap:wrap;gap:4px 14px;font-family:var(--mono);font-size:11px;color:var(--ink2);
+  border-top:1px solid var(--border);margin-top:9px;padding-top:9px}
+.probs b{color:var(--ink);font-weight:600}
+.rationale{list-style:none;margin-top:9px;border-top:1px solid var(--border);padding-top:8px}
+.rationale li{color:var(--ink2);font-size:12px;padding:2.5px 0 2.5px 14px;position:relative}
+.rationale li::before{content:"›";position:absolute;left:2px;color:var(--accent)}
+.pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--st-red);
+  animation:pul 1.6s ease-in-out infinite;vertical-align:1px}
+@keyframes pul{0%,100%{box-shadow:0 0 0 0 rgba(208,59,59,.55)}55%{box-shadow:0 0 0 7px rgba(208,59,59,0)}}
+@media (prefers-reduced-motion:reduce){.pulse{animation:none}.card{transition:none}}
+
+/* ---------- chart panels ---------- */
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+.p-h{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+.p-h .t{font-size:14.5px;font-weight:650}
+.p-h .s{font-size:12px;color:var(--ink3)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--ink2);margin:4px 0 2px}
+.legend .li{display:inline-flex;align-items:center;gap:7px}
+.legend svg{flex:none}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.tabs button{font:inherit;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--panel2);
+  border:1px solid var(--border);border-radius:999px;padding:6px 14px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:8px}
+.tabs button .d{width:8px;height:8px;border-radius:50%;flex:none}
+.tabs button[aria-selected="true"]{color:#04211c;background:var(--accent);border-color:var(--accent)}
+.tabs button[aria-selected="true"] .d{outline:2px solid rgba(4,33,28,.35)}
+.tabs button:focus-visible{outline:2px solid #4da3ff;outline-offset:2px}
+.chart-wrap{position:relative}
+.chart-wrap svg{display:block;width:100%;height:auto}
+.axis-t{font-size:11px;fill:var(--ink3)}
+.axis-cap{font-size:10px;fill:var(--ink3);letter-spacing:.08em;font-weight:600}
+.note-t{font-size:10.5px;fill:var(--ink2)}
+.cap{font-size:11.5px;color:var(--ink3);margin-top:8px}
+.cap b{color:var(--ink2);font-weight:600}
+#tt{position:fixed;z-index:40;pointer-events:none;background:#050d18;border:1px solid var(--gridhi);
+  border-radius:8px;padding:7px 10px;font-size:12px;color:var(--ink);box-shadow:0 6px 20px rgba(0,0,0,.5);
+  display:none;max-width:260px}
+#tt .h{font-family:var(--mono);font-size:11px;color:var(--ink3);margin-bottom:3px}
+#tt .r{display:flex;align-items:center;gap:7px;padding:1px 0}
+#tt .sw{width:9px;height:9px;border-radius:2px;flex:none}
+#tt .v{margin-left:auto;font-family:var(--mono);padding-left:12px}
+details.tblv{margin-top:10px}
+details.tblv summary{cursor:pointer;font-size:12px;color:var(--ink3)}
+details.tblv .scroll{max-height:220px;overflow:auto;margin-top:8px;border:1px solid var(--border);border-radius:8px}
+table.dt{border-collapse:collapse;width:100%;font-size:12px}
+table.dt th,table.dt td{padding:4px 12px;text-align:right;font-family:var(--mono);white-space:nowrap}
+table.dt th{position:sticky;top:0;background:var(--panel2);color:var(--ink2);font-weight:600;text-align:right}
+table.dt td{color:var(--ink2);border-top:1px solid var(--grid)}
+table.dt td:first-child,table.dt th:first-child{text-align:left}
+
+/* ---------- metrics ---------- */
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;align-content:start}
+.tile{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.tile .l{font-size:11px;letter-spacing:.06em;font-weight:600;color:var(--ink3)}
+.tile .v{font-size:26px;font-weight:650;margin-top:6px}
+.tile .v small{font-size:14px;color:var(--ink2);font-weight:500}
+.tile .d{font-size:11.5px;margin-top:4px;color:var(--ink3)}
+.tile .d.good{color:var(--st-green);font-weight:600}
+.cmx-wrap{overflow-x:auto}
+table.cmx{border-collapse:separate;border-spacing:3px;font-size:12.5px;margin-top:4px}
+table.cmx th{font-weight:600;color:var(--ink2);padding:5px 9px;text-align:center;font-size:11.5px}
+table.cmx th.rowh{text-align:right}
+table.cmx td{min-width:76px;text-align:center;padding:10px 7px;border-radius:6px;
+  font-family:var(--mono);font-weight:600}
+table.cmx td .pc{display:block;font-size:10px;font-weight:400;opacity:.85;margin-top:2px}
+.cmx-cap{font-size:11.5px;color:var(--ink3);margin-top:10px}
+
+/* ---------- footer / notice ---------- */
+footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
+  display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between;
+  font-size:11.5px;color:var(--ink3)}
+.notice{min-height:78vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}
+.notice .box{max-width:520px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:38px 34px}
+.notice h2{font-size:18px;letter-spacing:.06em;margin:14px 0 6px}
+.notice p{color:var(--ink2);font-size:13.5px;margin-top:6px}
+.notice code{display:block;font-family:var(--mono);font-size:13px;color:var(--accent);
+  background:#081120;border:1px solid var(--gridhi);border-radius:8px;padding:12px 16px;margin:18px 0 8px}
+@media (max-width:720px){
+  .hd-meta{align-items:flex-start}
+  header.hd{flex-direction:column;align-items:flex-start}
+  .wrap{padding:14px 12px 32px}
+  .panel{padding:12px}
+}
+</style>
+</head>
+<body>
+<div class="topbar"></div>
+<div id="app" class="wrap"></div>
+<div id="tt" aria-hidden="true"></div>
+
+<script src="data.js"></script>
+<script>
+"use strict";
+(function () {
+  const D = window.MARSAD_DATA;
+  const app = document.getElementById("app");
+
+  /* ---------- shared helpers ---------- */
+  const esc = s => String(s).replace(/[&<>"']/g,
+    c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const SUP = {"0":"⁰","1":"¹","2":"²","3":"³","4":"⁴",
+               "5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹","-":"⁻"};
+  const sci = x => {                       // 0.00061 -> "6.10×10⁻⁴"
+    if (!x) return "0";
+    const e = Math.floor(Math.log10(Math.abs(x)));
+    return (x / 10 ** e).toFixed(2) + "×10" +
+           String(e).split("").map(c => SUP[c]).join("");
+  };
+  const LVL = {
+    GREEN: {col: "var(--st-green)", hex: "#0ca30c", glyph: "●"},   // ●
+    AMBER: {col: "var(--st-amber)", hex: "#fab219", glyph: "◆"},   // ◆
+    RED:   {col: "var(--st-red)",   hex: "#d03b3b", glyph: "▲"},   // ▲
+  };
+  const CLASS_NAME = {no_bloom: "No bloom", dinoflagellate: "Dinoflagellate",
+                      cyanobacteria: "Cyanobacteria"};
+  const chip = lvl =>
+    `<span class="chip ${lvl}"><span class="g">${LVL[lvl].glyph}</span>${lvl}</span>`;
+
+  const logoSVG = (s) => `
+    <svg class="mark" width="${s}" height="${s}" viewBox="0 0 44 44" aria-hidden="true">
+      <circle cx="22" cy="22" r="20" fill="none" stroke="var(--accent)" stroke-width="1.4" opacity=".45"/>
+      <circle cx="22" cy="22" r="13" fill="none" stroke="var(--accent)" stroke-width="1.4" opacity=".7"/>
+      <path d="M 22 2 A 20 20 0 0 1 42 22" fill="none" stroke="var(--accent)" stroke-width="2.6"/>
+      <circle cx="22" cy="22" r="4.5" fill="var(--accent)"/>
+      <path d="M 25.2 18.8 L 38 6" stroke="var(--accent)" stroke-width="1.6"/>
+      <circle cx="38" cy="6" r="2.4" fill="var(--accent)"/>
+    </svg>`;
+
+  /* ---------- missing-data notice ---------- */
+  if (!D) {
+    document.title = "MARSAD 813 — no data";
+    app.innerHTML = `
+      <div class="notice"><div class="box">
+        ${logoSVG(46)}
+        <h2>MARSAD 813 <span style="color:var(--accent)">·</span>
+            <span dir="rtl">مَرصَد</span></h2>
+        <p><b>No data loaded</b> — <code style="display:inline;padding:1px 6px;margin:0">dashboard/data.js</code>
+           was not found next to this page.</p>
+        <p>Generate it by running the demo pipeline from the repo root:</p>
+        <code>python scripts/run_demo.py</code>
+        <p>then reload this page.</p>
+      </div></div>`;
+    return;
+  }
+
+  /* ---------- derived quantities ---------- */
+  const intakes = D.intakes;
+  const counts = {GREEN: 0, AMBER: 0, RED: 0};
+  intakes.forEach(it => counts[it.risk.level]++);
+  const worst = counts.RED ? "RED" : (counts.AMBER ? "AMBER" : "GREEN");
+  const mm = D.model_metrics;
+  const rmseGain = (1 - mm.stage1_rmse_after / mm.stage1_rmse_before) * 100;
+  const holdoutN = mm.stage2_confusion.flat().reduce((a, b) => a + b, 0);
+  // Forward-looking OUTLOOK (forecast day+7 vs today) — deliberately not
+  // called "trend": the rationale strings describe the RECENT history trend,
+  // which can disagree with where the forecast says risk is heading.
+  const trendOf = it => {
+    const d = it.forecast[it.forecast.length - 1].score - it.risk.score;
+    const cls = d > 0.02 ? "up" : (d < -0.02 ? "dn" : "fl");
+    const word = {up: "worsening", dn: "improving", fl: "steady"}[cls];
+    const arrow = {up: "▴", dn: "▾", fl: "▸"}[cls];
+    return {d, cls, word, arrow,
+            txt: `${arrow} ${word} ${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(2)} / 7 d`};
+  };
+
+  /* ---------- SVG geometry helpers ---------- */
+  const polar = (cx, cy, r, deg) => {           // deg clockwise from 12 o'clock
+    const a = deg * Math.PI / 180;
+    return [cx + r * Math.sin(a), cy - r * Math.cos(a)];
+  };
+  const arcPath = (cx, cy, r, a0, a1) => {
+    const [x0, y0] = polar(cx, cy, r, a0), [x1, y1] = polar(cx, cy, r, a1);
+    return `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+  };
+  const linePath = pts =>
+    pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ");
+
+  /* Score dial: 240° gauge, threshold notches at 0.35 / 0.65 (operator policy). */
+  function dialSVG(score, lvl) {
+    const cx = 47, cy = 50, r = 35, a0 = -120, sweep = 240;
+    const av = a0 + sweep * Math.min(1, Math.max(0, score));
+    const notch = (v, col) => {
+      const a = a0 + sweep * v;
+      const [x0, y0] = polar(cx, cy, r - 6, a), [x1, y1] = polar(cx, cy, r + 6, a);
+      return `<line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}"
+                stroke="${col}" stroke-width="1.6" opacity=".55"/>`;
+    };
+    return `
+    <svg width="94" height="86" viewBox="0 0 94 92" role="img"
+         aria-label="Risk index ${score.toFixed(2)} of 1, level ${lvl}">
+      <path d="${arcPath(cx, cy, r, a0, a0 + sweep)}" fill="none"
+            stroke="var(--panel2)" stroke-width="8" stroke-linecap="round"/>
+      <path d="${arcPath(cx, cy, r, a0, Math.max(av, a0 + 1))}" fill="none"
+            stroke="${LVL[lvl].col}" stroke-width="8" stroke-linecap="round"/>
+      ${notch(0.35, "var(--st-amber)")}${notch(0.65, "var(--st-red)")}
+      <text x="${cx}" y="${cy + 5}" text-anchor="middle"
+            style="font-size:21px;font-weight:650" fill="var(--ink)">${score.toFixed(2)}</text>
+      <text x="${cx}" y="${cy + 20}" text-anchor="middle"
+            style="font-size:8.5px;letter-spacing:.14em" fill="var(--ink3)">RISK</text>
+    </svg>`;
+  }
+
+  const kindIcon = kind => kind === "reservoir"
+    ? `<svg width="13" height="11" viewBox="0 0 13 11" aria-hidden="true">
+         <path d="M1 10 L1 4 Q6.5 0 12 4 L12 10" fill="none" stroke="var(--ink3)" stroke-width="1.3"/>
+         <path d="M2.5 7.5 q1 -.9 2 0 t2 0 t2 0 t2 0" fill="none" stroke="var(--ink3)" stroke-width="1.1"/>
+       </svg>`
+    : `<svg width="14" height="10" viewBox="0 0 14 10" aria-hidden="true">
+         <path d="M1 3 q1.6-1.6 3.2 0 t3.2 0 t3.2 0 t2.4 0" fill="none" stroke="var(--ink3)" stroke-width="1.2"/>
+         <path d="M1 7 q1.6-1.6 3.2 0 t3.2 0 t3.2 0 t2.4 0" fill="none" stroke="var(--ink3)" stroke-width="1.2"/>
+       </svg>`;
+
+  /* ---------- static page skeleton ---------- */
+  app.innerHTML = `
+  <header class="hd">
+    <div class="brand">
+      ${logoSVG(44)}
+      <div>
+        <h1>MARSAD <span class="n813">813</span></h1>
+        <div class="sub"><span class="ar" dir="rtl">مَرصَد</span>
+          · Hyperspectral harmful-algal-bloom early warning · Gulf of Oman &amp; Sharjah intakes</div>
+      </div>
+    </div>
+    <div class="hd-right">
+      <div class="sys" role="status">
+        <span class="lbl">SYSTEM STATUS</span>
+        ${counts.RED ? '<span class="pulse" aria-hidden="true"></span>' : ""}
+        ${chip(worst)}
+        <span class="counts">${counts.RED} RED · ${counts.AMBER} AMBER · ${counts.GREEN} GREEN</span>
+      </div>
+      <div class="hd-meta">
+        <span class="badge-syn" title="All spectra, labels and scores are simulated — no real satellite data behind this view.">SYNTHETIC DEMONSTRATION DATA</span>
+        <span class="stamp">generated <b>${esc(D.generated_utc)}</b></span>
+      </div>
+    </div>
+  </header>
+
+  <section class="sec" aria-labelledby="sh1">
+    <div class="sec-h"><span class="k">01</span><span class="t" id="sh1">Intake risk board</span>
+      <span class="s">click or press Enter on a card to chart it</span></div>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section class="sec" aria-labelledby="sh2">
+    <div class="sec-h"><span class="k">02</span><span class="t" id="sh2">Risk outlook</span>
+      <span class="s">30-day history + 7-day forecast · risk index [0–1]</span></div>
+    <div class="panel">
+      <div class="tabs" role="tablist" aria-label="Select intake" id="tabs"></div>
+      <div class="p-h">
+        <span class="t" id="rc-title"></span>
+        <span class="s" id="rc-sub"></span>
+      </div>
+      <div class="chart-wrap" id="riskchart"></div>
+      <details class="tblv"><summary>View data table</summary>
+        <div class="scroll"><table class="dt" id="risktable"></table></div>
+      </details>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="sh3">
+    <div class="sec-h"><span class="k">03</span><span class="t" id="sh3">Stage-1 shallow-water correction</span>
+      <span class="s">example bloom pixel · 205 bands · 400–1700 nm</span></div>
+    <div class="panel">
+      <div class="p-h">
+        <span class="t">Remote-sensing reflectance R<sub>rs</sub> before / after correction</span>
+        <span class="legend" id="sp-legend"></span>
+      </div>
+      <div class="chart-wrap" id="specchart"></div>
+      <div class="cap"><b>Key wavelengths</b> — 443 / 675 nm chl-a absorption · 555 nm green peak ·
+        620 nm phycocyanin (cyanobacteria) · 665–708 nm NDCI / bloom red edge.
+        Clean water is ~black in SWIR: the flat offset the observed spectrum keeps out to 1700 nm is
+        surface/water-column contamination (sunglint plus residual bottom signal), which Stage&nbsp;1 removes.</div>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="sh4">
+    <div class="sec-h"><span class="k">04</span><span class="t" id="sh4">Model metrics</span>
+      <span class="s">held-out synthetic pixels (training holdout)</span></div>
+    <div class="metrics">
+      <div class="tiles" id="tiles"></div>
+      <div class="panel">
+        <div class="p-h"><span class="t">Stage-2 confusion matrix</span>
+          <span class="s">rows = true class · columns = predicted</span></div>
+        <div class="cmx-wrap"><table class="cmx" id="cmx"></table></div>
+        <div class="cmx-cap">Cell shade ∝ share of the true class (row-normalised); count on top, row-% underneath.</div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>MARSAD 813 — <span dir="rtl">مَرصَد</span> · Arab 813 Space Hackathon</span>
+    <span>Synthetic demonstration data — not operational guidance</span>
+    <span>205-band simulated spectra · 400–1700 nm</span>
+  </footer>`;
+
+  /* ---------- 01 · intake cards ---------- */
+  const cardsEl = document.getElementById("cards");
+  cardsEl.innerHTML = intakes.map((it, i) => {
+    const t = trendOf(it), p = it.bloom.probs;
+    return `
+    <div class="card lvl-${it.risk.level}" role="button" tabindex="0" data-i="${i}"
+         aria-pressed="false" aria-label="${esc(it.name)}: ${it.risk.level}, risk ${it.risk.score.toFixed(2)}. Select to chart.">
+      <div class="c-top">
+        <div>
+          <div class="c-name">${esc(it.name)}</div>
+          <div class="c-kind">${kindIcon(it.kind)} ${esc(it.kind.replace(/_/g, " ").toUpperCase())}</div>
+          <div class="c-geo">${it.lat.toFixed(3)}°N ${it.lon.toFixed(3)}°E</div>
+        </div>
+        ${chip(it.risk.level)}
+      </div>
+      <div class="c-mid">
+        ${dialSVG(it.risk.score, it.risk.level)}
+        <div class="c-facts">
+          <div><div class="fl">DOMINANT CLASS</div>
+               <div class="fv">${CLASS_NAME[it.bloom.dominant] || esc(it.bloom.dominant)}</div></div>
+          <div><div class="fl">CHL-A ESTIMATE</div>
+               <div class="fv">${it.bloom.chl_mg_m3.toFixed(1)} <small>mg/m³</small></div></div>
+          <div><div class="fl">7-DAY OUTLOOK</div>
+               <div class="trend ${t.cls}">${t.txt}</div></div>
+        </div>
+      </div>
+      <div class="probs">
+        <span>P(no bloom) <b>${p.no_bloom.toFixed(2)}</b></span>
+        <span>P(dino) <b>${p.dinoflagellate.toFixed(2)}</b></span>
+        <span>P(cyano) <b>${p.cyanobacteria.toFixed(2)}</b></span>
+      </div>
+      <ul class="rationale">${it.risk.rationale.map(r => `<li>${esc(r)}</li>`).join("")}</ul>
+    </div>`;
+  }).join("");
+
+  /* ---------- 02 · tabs ---------- */
+  const tabsEl = document.getElementById("tabs");
+  tabsEl.innerHTML = intakes.map((it, i) => `
+    <button role="tab" id="tab-${i}" aria-selected="false" tabindex="-1" data-i="${i}">
+      <span class="d" style="background:${LVL[it.risk.level].hex}" aria-hidden="true"></span>
+      ${esc(it.name)}
+    </button>`).join("");
+
+  /* ---------- shared tooltip ---------- */
+  const tt = document.getElementById("tt");
+  const showTT = (html, x, y) => {
+    tt.innerHTML = html;
+    tt.style.display = "block";
+    const w = tt.offsetWidth, h = tt.offsetHeight;
+    tt.style.left = Math.min(x + 16, window.innerWidth - w - 8) + "px";
+    tt.style.top = Math.max(8, Math.min(y - h - 14, window.innerHeight - h - 8)) + "px";
+  };
+  const hideTT = () => { tt.style.display = "none"; };
+
+  /* ---------- 02 · history + forecast chart ---------- */
+  const RC = {W: 960, H: 340, l: 46, r: 14, t: 30, b: 34};
+  RC.pw = RC.W - RC.l - RC.r; RC.ph = RC.H - RC.t - RC.b;
+  const rx = d => RC.l + (d + 29) / 36 * RC.pw;
+  const ry = v => RC.t + (1 - v) * RC.ph;
+
+  function renderRiskChart(i) {
+    const it = intakes[i];
+    const hist = it.history.map(p => [p.day, p.score]);
+    const day0 = it.history[it.history.length - 1];
+    // Band and mean start at day 0 so forecast visually continues the history.
+    const fc = [{day: 0, score: day0.score, lo: day0.score, hi: day0.score}, ...it.forecast];
+    const bandPts = fc.map(p => [rx(p.day), ry(p.hi)])
+      .concat(fc.slice().reverse().map(p => [rx(p.day), ry(p.lo)]));
+    const yGrid = [0, .25, .5, .75, 1].map(v => `
+      <line x1="${RC.l}" x2="${RC.l + RC.pw}" y1="${ry(v)}" y2="${ry(v)}" stroke="var(--grid)" stroke-width="1"/>
+      <text class="axis-t" x="${RC.l - 8}" y="${ry(v) + 4}" text-anchor="end">${v.toFixed(2)}</text>`).join("");
+    const xTicks = [-21, -14, -7, 0, 7].map(d => `
+      <text class="axis-t" x="${rx(d)}" y="${RC.H - 12}" text-anchor="middle">${d > 0 ? "+" + d : d}</text>`).join("");
+    const thr = (v, col, lab) => `
+      <line x1="${RC.l}" x2="${RC.l + RC.pw}" y1="${ry(v)}" y2="${ry(v)}"
+            stroke="${col}" stroke-width="1" stroke-dasharray="5 5" opacity=".5"/>
+      <text class="axis-t" x="${RC.l + RC.pw - 4}" y="${ry(v) - 5}" text-anchor="end" opacity=".9">${lab}</text>`;
+
+    document.getElementById("rc-title").textContent =
+      `${it.name} — risk index, day −29 → +7`;
+    document.getElementById("rc-sub").textContent =
+      `today ${it.risk.score.toFixed(2)} · day +7 mean ` +
+      `${it.forecast[it.forecast.length - 1].score.toFixed(2)} ` +
+      `(band ${it.forecast[it.forecast.length - 1].lo.toFixed(2)}–${it.forecast[it.forecast.length - 1].hi.toFixed(2)})`;
+
+    document.getElementById("riskchart").innerHTML = `
+    <svg viewBox="0 0 ${RC.W} ${RC.H}" role="img"
+         aria-label="Risk history and forecast for ${esc(it.name)}. Today ${it.risk.score.toFixed(2)}; forecast day 7 mean ${it.forecast[6].score.toFixed(2)}. Full values in the data table below.">
+      <rect x="${rx(0)}" y="${RC.t}" width="${rx(7) - rx(0)}" height="${RC.ph}" fill="rgba(57,135,229,.05)"/>
+      ${yGrid}${xTicks}
+      ${thr(0.35, "var(--st-amber)", "AMBER ≥ 0.35")}
+      ${thr(0.65, "var(--st-red)", "RED ≥ 0.65")}
+      <line x1="${rx(0)}" x2="${rx(0)}" y1="${RC.t - 6}" y2="${RC.t + RC.ph}" stroke="var(--ink3)" stroke-width="1"/>
+      <text class="axis-cap" x="${rx(0) - 6}" y="${RC.t - 10}" text-anchor="end">HISTORY</text>
+      <text class="axis-cap" x="${rx(0) + 6}" y="${RC.t - 10}">TODAY · FORECAST →</text>
+      <polygon points="${bandPts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"
+               fill="var(--s-true)" opacity=".16"/>
+      <path d="${linePath(hist.map(p => [rx(p[0]), ry(p[1])]))}" fill="none"
+            stroke="var(--s-true)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <path d="${linePath(fc.map(p => [rx(p.day), ry(p.score)]))}" fill="none"
+            stroke="var(--s-true)" stroke-width="2" stroke-dasharray="6 5"
+            stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${rx(0)}" cy="${ry(day0.score)}" r="4.5" fill="var(--s-true)"
+              stroke="var(--panel)" stroke-width="2"/>
+      <text class="axis-t" x="${RC.l}" y="${RC.H - 12}">day</text>
+      <line id="rc-cross" y1="${RC.t}" y2="${RC.t + RC.ph}" stroke="var(--gridhi)" stroke-width="1" opacity="0"/>
+      <rect id="rc-hover" x="${RC.l}" y="${RC.t}" width="${RC.pw}" height="${RC.ph}" fill="transparent"/>
+    </svg>`;
+
+    // data table (accessible fallback for the chart)
+    document.getElementById("risktable").innerHTML =
+      `<tr><th>day</th><th>score</th><th>lo</th><th>hi</th></tr>` +
+      it.history.map(p => `<tr><td>${p.day}</td><td>${p.score.toFixed(3)}</td><td>—</td><td>—</td></tr>`).join("") +
+      it.forecast.map(p => `<tr><td>+${p.day}</td><td>${p.score.toFixed(3)}</td><td>${p.lo.toFixed(3)}</td><td>${p.hi.toFixed(3)}</td></tr>`).join("");
+
+    // hover: crosshair + tooltip at nearest day
+    const svg = document.querySelector("#riskchart svg");
+    const cross = svg.querySelector("#rc-cross");
+    const all = it.history.map(p => ({day: p.day, score: p.score}))
+      .concat(it.forecast.map(p => ({day: p.day, score: p.score, lo: p.lo, hi: p.hi})));
+    svg.querySelector("#rc-hover").addEventListener("mousemove", e => {
+      const box = svg.getBoundingClientRect();
+      const px = (e.clientX - box.left) * RC.W / box.width;
+      const day = Math.round((px - RC.l) / RC.pw * 36 - 29);
+      const p = all.find(q => q.day === Math.max(-29, Math.min(7, day)));
+      if (!p) return;
+      cross.setAttribute("x1", rx(p.day)); cross.setAttribute("x2", rx(p.day));
+      cross.setAttribute("opacity", "1");
+      showTT(`<div class="h">day ${p.day > 0 ? "+" + p.day : p.day}${p.day > 0 ? " (forecast)" : ""}</div>
+        <div class="r"><span class="sw" style="background:var(--s-true)"></span>risk
+          <span class="v">${p.score.toFixed(3)}</span></div>` +
+        (p.lo !== undefined ? `<div class="r"><span class="sw" style="background:rgba(57,135,229,.35)"></span>10–90% band
+          <span class="v">${p.lo.toFixed(3)}–${p.hi.toFixed(3)}</span></div>` : ""),
+        e.clientX, e.clientY);
+    });
+    svg.addEventListener("mouseleave", () => { cross.setAttribute("opacity", "0"); hideTT(); });
+  }
+
+  /* ---------- selection wiring (click + keyboard) ---------- */
+  let selected = 0;
+  function selectIntake(i, focusTab) {
+    selected = i;
+    cardsEl.querySelectorAll(".card").forEach(c => {
+      const on = +c.dataset.i === i;
+      c.classList.toggle("selected", on);
+      c.setAttribute("aria-pressed", on);
+    });
+    tabsEl.querySelectorAll("button").forEach(b => {
+      const on = +b.dataset.i === i;
+      b.setAttribute("aria-selected", on);
+      b.tabIndex = on ? 0 : -1;
+      if (on && focusTab) b.focus();
+    });
+    renderRiskChart(i);
+  }
+  cardsEl.querySelectorAll(".card").forEach(c => {
+    c.addEventListener("click", () => selectIntake(+c.dataset.i));
+    c.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectIntake(+c.dataset.i); }
+    });
+  });
+  tabsEl.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (b) selectIntake(+b.dataset.i);
+  });
+  tabsEl.addEventListener("keydown", e => {
+    const n = intakes.length;
+    if (e.key === "ArrowRight") { e.preventDefault(); selectIntake((selected + 1) % n, true); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); selectIntake((selected + n - 1) % n, true); }
+    else if (e.key === "Home") { e.preventDefault(); selectIntake(0, true); }
+    else if (e.key === "End") { e.preventDefault(); selectIntake(n - 1, true); }
+  });
+
+  /* ---------- 03 · spectra chart ---------- */
+  (function renderSpectra() {
+    const S = D.spectra_example;
+    const W = 960, H = 400, l = 50, r = 14, t = 56, b = 40;
+    const pw = W - l - r, ph = H - t - b;
+    const yMax = Math.max(...S.observed, ...S.true) * 1.10;
+    const sx = wl => l + (wl - 400) / 1300 * pw;
+    const sy = v => t + (1 - v / yMax) * ph;
+    const seriesDefs = [
+      {key: "observed",  name: "Observed (contaminated)", col: "var(--s-obs)",  dash: ""},
+      {key: "corrected", name: "Corrected (Stage 1)",     col: "var(--s-cor)",  dash: ""},
+      {key: "true",      name: "True at-surface",         col: "var(--s-true)", dash: "7 5"},
+    ];
+    document.getElementById("sp-legend").innerHTML = seriesDefs.map(s => `
+      <span class="li"><svg width="22" height="6" aria-hidden="true">
+        <line x1="0" x2="22" y1="3" y2="3" stroke="${s.col}" stroke-width="2.5"
+          ${s.dash ? `stroke-dasharray="${s.dash}"` : ""}/></svg>${s.name}</span>`).join("");
+
+    // key wavelengths, staggered over two label rows so 665/675 don't collide
+    const keyWl = [[443, 0], [555, 1], [620, 0], [665, 1], [675, 0], [708, 1]];
+    const annos = keyWl.map(([wl, row]) => `
+      <line x1="${sx(wl).toFixed(1)}" x2="${sx(wl).toFixed(1)}" y1="${t - 8}" y2="${t + ph}"
+            stroke="var(--gridhi)" stroke-width="1" opacity=".8"/>
+      <text class="axis-t" x="${sx(wl).toFixed(1)}" y="${row ? t - 26 : t - 13}"
+            text-anchor="middle" fill="var(--ink2)">${wl}</text>`).join("");
+
+    const yTicks = [];
+    for (let v = 0; v <= yMax; v += 0.005) yTicks.push(v);
+    const grid = yTicks.map(v => `
+      <line x1="${l}" x2="${l + pw}" y1="${sy(v).toFixed(1)}" y2="${sy(v).toFixed(1)}" stroke="var(--grid)" stroke-width="1"/>
+      <text class="axis-t" x="${l - 8}" y="${(sy(v) + 4).toFixed(1)}" text-anchor="end">${v.toFixed(3)}</text>`).join("");
+    const xt = [400, 600, 800, 1000, 1200, 1400, 1600].map(wl => `
+      <text class="axis-t" x="${sx(wl)}" y="${H - 14}" text-anchor="middle">${wl === 1600 ? "1600 nm" : wl}</text>`).join("");
+
+    const paths = seriesDefs.map(s => `
+      <path d="${linePath(S.wavelength_nm.map((wl, k) => [sx(wl), sy(S[s.key][k])]))}"
+            fill="none" stroke="${s.col}" stroke-width="2"
+            ${s.dash ? `stroke-dasharray="${s.dash}"` : ""}
+            stroke-linejoin="round" stroke-linecap="round"/>`).join("");
+
+    // one annotation: the SWIR contamination offset Stage 1 removes
+    const gx = sx(1250), gy = sy(S.observed[134] || 0.002);
+    const anno = `
+      <line x1="${gx}" y1="${gy - 8}" x2="${gx}" y2="${gy - 46}" stroke="var(--ink3)" stroke-width="1"/>
+      <text class="note-t" x="${gx}" y="${gy - 54}" text-anchor="middle">glint + bottom residual — clean water is ~black in SWIR</text>`;
+
+    document.getElementById("specchart").innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" role="img"
+         aria-label="Reflectance spectra of an example bloom pixel: observed with bottom and glint contamination, Stage-1 corrected, and true at-surface reference. Key wavelengths 443, 555, 620, 665, 675 and 708 nanometres are marked.">
+      ${grid}${annos}${xt}${paths}${anno}
+      <text class="axis-t" x="${l}" y="16" fill="var(--ink2)">Rᵣₛ (sr⁻¹) · wavelength (nm) →</text>
+      <line id="sp-cross" y1="${t}" y2="${t + ph}" stroke="var(--gridhi)" stroke-width="1" opacity="0"/>
+      <rect id="sp-hover" x="${l}" y="${t}" width="${pw}" height="${ph}" fill="transparent"/>
+    </svg>`;
+
+    const svg = document.querySelector("#specchart svg");
+    const cross = svg.querySelector("#sp-cross");
+    svg.querySelector("#sp-hover").addEventListener("mousemove", e => {
+      const box = svg.getBoundingClientRect();
+      const px = (e.clientX - box.left) * W / box.width;
+      const wl = 400 + (px - l) / pw * 1300;
+      let k = Math.round((wl - 400) / 1300 * (S.wavelength_nm.length - 1));
+      k = Math.max(0, Math.min(S.wavelength_nm.length - 1, k));
+      cross.setAttribute("x1", sx(S.wavelength_nm[k]));
+      cross.setAttribute("x2", sx(S.wavelength_nm[k]));
+      cross.setAttribute("opacity", "1");
+      showTT(`<div class="h">λ = ${S.wavelength_nm[k].toFixed(1)} nm · band ${k}</div>` +
+        seriesDefs.map(s => `<div class="r"><span class="sw" style="background:${s.col}"></span>
+          ${s.name.split(" (")[0]}<span class="v">${S[s.key][k].toFixed(4)}</span></div>`).join(""),
+        e.clientX, e.clientY);
+    });
+    svg.addEventListener("mouseleave", () => { cross.setAttribute("opacity", "0"); hideTT(); });
+  })();
+
+  /* ---------- 04 · metric tiles + confusion matrix ---------- */
+  document.getElementById("tiles").innerHTML = `
+    <div class="tile">
+      <div class="l">Stage-1 RMSE · corrected</div>
+      <div class="v">${sci(mm.stage1_rmse_after)} <small>sr⁻¹</small></div>
+      <div class="d good">−${rmseGain.toFixed(1)}% vs uncorrected (${sci(mm.stage1_rmse_before)})</div>
+    </div>
+    <div class="tile">
+      <div class="l">Stage-2 accuracy</div>
+      <div class="v">${(mm.stage2_accuracy * 100).toFixed(1)}<small>%</small></div>
+      <div class="d">holdout n = ${holdoutN} pixels</div>
+    </div>
+    <div class="tile">
+      <div class="l">Spectral bands</div>
+      <div class="v">205</div>
+      <div class="d">400–1700 nm · ~6.4 nm grid</div>
+    </div>
+    <div class="tile">
+      <div class="l">Intakes monitored</div>
+      <div class="v">${intakes.length}</div>
+      <div class="d">${intakes.filter(x => x.kind === "reservoir").length} reservoir ·
+        ${intakes.filter(x => x.kind !== "reservoir").length} desalination</div>
+    </div>`;
+
+  (function renderConfusion() {
+    const cm = mm.stage2_confusion, labels = mm.labels;
+    // row-normalised sequential ramp: panel2 -> series blue (single hue, light->dark job)
+    const lerp = (a, b, u) => Math.round(a + (b - a) * u);
+    const c0 = [19, 35, 58], c1 = [57, 135, 229];
+    const cellCol = u => `rgb(${lerp(c0[0], c1[0], u)},${lerp(c0[1], c1[1], u)},${lerp(c0[2], c1[2], u)})`;
+    let html = `<tr><th class="rowh" scope="col">true ↓ \\ predicted →</th>` +
+      labels.map(lb => `<th scope="col">${esc(CLASS_NAME[lb] || lb)}</th>`).join("") +
+      `<th scope="col">recall</th></tr>`;
+    cm.forEach((row, ri) => {
+      const tot = row.reduce((a, b) => a + b, 0) || 1;
+      html += `<tr><th class="rowh" scope="row">${esc(CLASS_NAME[labels[ri]] || labels[ri])}</th>` +
+        row.map((v, ci) => {
+          const u = Math.pow(v / tot, 0.75);
+          const fg = u > 0.4 ? "#f2f7ff" : "var(--ink2)";
+          return `<td style="background:${cellCol(u)};color:${fg}"
+            title="true ${esc(labels[ri])} → predicted ${esc(labels[ci])}: ${v} px">
+            ${v}<span class="pc">${(100 * v / tot).toFixed(1)}%</span></td>`;
+        }).join("") +
+        `<td style="color:var(--ink2);background:transparent">${(100 * row[ri] / tot).toFixed(1)}%</td></tr>`;
+    });
+    document.getElementById("cmx").innerHTML = html;
+  })();
+
+  /* ---------- boot ---------- */
+  selectIntake(0);
+})();
+</script>
+</body>
+</html>
