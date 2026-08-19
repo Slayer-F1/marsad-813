@@ -15,6 +15,16 @@ This module does two load-bearing jobs for MARSAD 813.
    width at ``N_BANDS``, only the spectral *information* changes, never the
    model input dimension, so an accuracy drop cannot be blamed on architecture.
 
+3. **The spatial term.** A band set is only half of what an instrument can see;
+   the other half is the size of its pixel. A spectral-only ablation silently
+   assumes every sensor resolves the bloom patch, which is false at the scale
+   that matters operationally: OLCI pixels are 300 m and MODIS ocean-colour
+   pixels are 1 km, so an intake-scale patch is sub-pixel and reaches the
+   instrument mixed with the clear water around it. :func:`subpixel_fill_fraction`
+   and :func:`mix_subpixel` add that term, which is what makes the comparison
+   honest in *both* directions: OLCI really does carry a 620 nm band, and a
+   100 m patch really does fill only about a ninth of one OLCI pixel.
+
 Radiometry: a band value is the spectral-response-weighted mean of Rrs over the
 band, which is what a radiometer with that response function records. Each
 response is modelled as a Gaussian of the published FWHM, sampled on
@@ -38,6 +48,13 @@ Sources for the band tables:
 * Landsat-8 OLI: USGS Landsat 8 band designations; Roy et al. 2014,
   Remote Sensing of Environment 145, 154-172.
 
+Ground sampling distances come from the same agency documentation and are the
+figures for the *water-relevant* bands: Sentinel-2 20 m (the red-edge bands
+B5-B7 that carry the bloom signal are 20 m, not the 10 m of B2-B4 and B8),
+OLCI 300 m at full resolution, MODIS Aqua 1000 m for the ocean-colour bands,
+Landsat-8 OLI 30 m. The 813 figure is the one exception and is an explicit
+assumption, not a published number: see :data:`ASSUMED_813_GSD_M`.
+
 Scientific honesty rule (CONTRACTS-V2, binding): the spectra resampled here
 come from ``synth.py``, which is our own forward model. An ablation that
 degrades those simulated spectra to a Sentinel-2 or MODIS band set measures how
@@ -55,7 +72,27 @@ import numpy as np
 
 from .spectra import BAND_GRID, N_BANDS
 
-__all__ = ["Band", "Sensor", "SENSORS", "resample", "resample_to_grid"]
+__all__ = [
+    "Band",
+    "Sensor",
+    "SENSORS",
+    "ASSUMED_813_GSD_M",
+    "resample",
+    "resample_to_grid",
+    "subpixel_fill_fraction",
+    "mix_subpixel",
+]
+
+# Ground sampling distance assumed for the 813 instrument, in metres.
+#
+# THIS IS AN ASSUMPTION, NOT A PUBLISHED SPECIFICATION. The real 813 GSD is not
+# in the public domain while this hackathon runs, so we place the instrument in
+# the same class as the flying spaceborne imaging spectrometers it most
+# resembles: EnMAP (30 m) and PRISMA (30 m). It lives here as a module constant
+# so that it is greppable, appears in the sensor note that every ablation table
+# prints, and can be replaced in exactly one place the moment GIQ publishes the
+# real figure. Never quote it as a specification of the instrument.
+ASSUMED_813_GSD_M = 30.0
 
 # FWHM -> sigma for a Gaussian spectral response.
 _FWHM_TO_SIGMA = 2.0 * np.sqrt(2.0 * np.log(2.0))  # 2.35482...
@@ -92,16 +129,33 @@ class Sensor:
     ``benchmark.py`` prints it next to each accuracy number so that a drop in
     performance is always read together with the physical reason for it (no
     620 nm band, 1 km pixels, and so on) rather than as a bare score.
+
+    ``gsd_m`` is the ground sampling distance in metres for the water-relevant
+    bands, that is, the side length of one pixel on the sea surface. It is the
+    spatial half of "what this sensor can see": a band set that resolves a
+    pigment line is of no use if the patch carrying that line occupies a
+    hundredth of a pixel. :func:`subpixel_fill_fraction` and
+    :func:`mix_subpixel` turn it into the dilution a coarse sensor actually
+    suffers.
     """
 
     key: str
     label: str
     bands: tuple[Band, ...]
     note: str
+    # Defaulted so that every existing construction site keeps working and any
+    # ad-hoc Sensor built in a test or an experiment behaves like the native
+    # 813 instrument rather than silently acquiring a coarse pixel.
+    gsd_m: float = ASSUMED_813_GSD_M
 
     def __post_init__(self) -> None:
         if not self.bands:
             raise ValueError(f"sensor {self.key!r} has no bands")
+        if not np.isfinite(self.gsd_m) or self.gsd_m <= 0.0:
+            raise ValueError(
+                f"sensor {self.key!r}: gsd_m must be a positive, finite number of "
+                f"metres, got {self.gsd_m!r}"
+            )
         for band in self.bands:
             if not np.isfinite(band.center_nm) or not np.isfinite(band.fwhm_nm):
                 raise ValueError(f"{self.key}/{band.name}: non-finite band definition")
@@ -138,7 +192,13 @@ SENSORS: dict[str, Sensor] = {
         key="marsad_813",
         label="MARSAD 813 imaging spectrometer",
         bands=_native_bands(),
-        note="205 contiguous bands, 400-1700 nm",
+        note=(
+            "205 contiguous bands, 400-1700 nm; ground sampling distance is an "
+            "explicit assumption of 30 m (ASSUMED_813_GSD_M), not a published "
+            "figure, matching the EnMAP and PRISMA hyperspectral class and to be "
+            "replaced when GIQ publishes the real value."
+        ),
+        gsd_m=ASSUMED_813_GSD_M,
     ),
     # ESA Sentinel-2A MSI. B12 (2190 nm) is beyond the 813 range and is dropped.
     "sentinel2_msi": Sensor(
@@ -159,10 +219,13 @@ SENSORS: dict[str, Sensor] = {
             Band("B11", 1610.0, 90.0),    # SWIR 1
         ),
         note=(
-            "12 bands inside 400-1700 nm at 10-60 m, but no band at 620 nm, so "
+            "12 bands inside 400-1700 nm, and the finest water pixel it offers is "
+            "20 m because the red-edge bands B5-B7 that carry the bloom signal are "
+            "20 m, not the 10 m of B2-B4 and B8; but there is no band at 620 nm, so "
             "phycocyanin is not directly observable and cyanobacteria cannot be "
             "separated from other blooms on pigment absorption."
         ),
+        gsd_m=20.0,
     ),
     # ESA Sentinel-3 OLCI, bands Oa1-Oa21. The O2 A-band trio (Oa13-Oa15,
     # 761.25/764.375/767.5 nm) and the 940 nm water-vapour band Oa20 are
@@ -194,8 +257,11 @@ SENSORS: dict[str, Sensor] = {
             "OLCI does carry a 620 nm band, the only operational ocean-colour "
             "sensor that does, but one 10 nm band at 300 m ground sampling "
             "cannot robustly separate phycocyanin absorption from co-varying "
-            "sediment and chlorophyll absorption in the same pixel."
+            "sediment and chlorophyll absorption in the same pixel, and at 300 m "
+            "a 100 m intake-scale patch fills only about a ninth of that pixel, "
+            "so its signal arrives diluted with the surrounding clear water."
         ),
+        gsd_m=300.0,
     ),
     # NASA MODIS Aqua, ocean-colour and land bands within 400-1700 nm.
     "modis_aqua": Sensor(
@@ -220,8 +286,10 @@ SENSORS: dict[str, Sensor] = {
         ),
         note=(
             "No 620 nm band, so no phycocyanin route, and 1 km ocean-colour "
-            "pixels average intake-scale patches away before they can be seen."
+            "pixels average intake-scale patches away before they can be seen: a "
+            "100 m patch fills one percent of a single 1000 m pixel."
         ),
+        gsd_m=1000.0,
     ),
     # USGS Landsat-8 OLI reflective bands within 400-1700 nm. The 590 nm
     # panchromatic band, the 1373 nm cirrus band and B7 (2201 nm) are excluded:
@@ -241,8 +309,10 @@ SENSORS: dict[str, Sensor] = {
         note=(
             "6 usable water bands, blue-green ratio only: no 620 nm band and no "
             "red-edge band, so neither speciation nor dense-bloom red edge is "
-            "measurable, whatever the 30 m pixel size allows spatially."
+            "measurable, whatever the 30 m pixel size allows spatially. The "
+            "spatial sampling is the one thing OLI does bring to this comparison."
         ),
+        gsd_m=30.0,
     ),
 }
 
@@ -402,3 +472,114 @@ def resample_to_grid(rrs_sensor: np.ndarray, sensor: Sensor | str) -> np.ndarray
     y1 = y[:, idx + 1]
     out = y0 + (y1 - y0) * w[None, :]
     return out[0] if was_1d else out
+
+
+def subpixel_fill_fraction(patch_size_m: float, sensor: Sensor | str) -> float:
+    """Fraction of one sensor pixel that a square bloom patch covers.
+
+    ``min(1.0, (patch_size_m / sensor.gsd_m) ** 2)``: a square patch of side
+    ``patch_size_m`` has area ``patch_size_m ** 2``, a pixel has area
+    ``gsd_m ** 2``, and a patch at least as wide as the pixel fills it
+    completely. The quadratic is the whole point: halving the patch quarters
+    the fill, so coarse pixels lose intake-scale features very fast. A 100 m
+    patch fills one OLCI pixel (300 m) to about 0.111 and one MODIS
+    ocean-colour pixel (1 km) to 0.01, while the 30 m class resolves it
+    outright.
+
+    This is the term a spectral-only ablation leaves out. Comparing band sets
+    alone silently assumes every sensor resolves the patch, which flatters the
+    coarse instruments; adding this term is what makes the sensor comparison
+    honest in both directions.
+
+    Best case by construction: the patch is assumed square, aligned with the
+    pixel and wholly inside it, so a real patch of the same area (irregular
+    shape, straddling a pixel boundary) fills its brightest pixel less than
+    this. Nothing here is a claim about how OLCI or MODIS behave on real Gulf
+    water; it is the geometry we apply to spectra from ``synth.py``, our own
+    forward model.
+
+    Parameters
+    ----------
+    patch_size_m
+        Side length of the bloom patch in metres. Must be positive and finite.
+    sensor
+        A :class:`Sensor` or a key of :data:`SENSORS`.
+
+    Returns
+    -------
+    A float in (0, 1].
+    """
+    sen = _resolve(sensor)
+    size = float(patch_size_m)
+    if not np.isfinite(size) or size <= 0.0:
+        raise ValueError(
+            f"patch_size_m must be a positive, finite number of metres, got {patch_size_m!r}"
+        )
+    return float(min(1.0, (size / sen.gsd_m) ** 2))
+
+
+def mix_subpixel(
+    rrs_target: np.ndarray,
+    rrs_background: np.ndarray,
+    patch_size_m: float,
+    sensor: Sensor | str,
+) -> np.ndarray:
+    """Dilute a bloom spectrum with its surroundings inside one sensor pixel.
+
+    Linear spectral mixing, ``f * target + (1 - f) * background``, with ``f``
+    from :func:`subpixel_fill_fraction`. Linear mixing is the standard
+    approximation for two adjacent surface types sharing one pixel: the
+    at-sensor signal is the area-weighted mean of what each part radiates.
+
+    It ignores adjacency effects (photons scattered from the surrounding water
+    into the instrument's line of sight) and the point-spread function (a real
+    pixel collects light from beyond its nominal footprint), both of which
+    smear a small bright patch further into its background. Including them
+    would make the coarse sensors look worse still, so linear mixing is the
+    conservative choice: whatever advantage the 813 pixel shows here is a
+    lower bound on the advantage a full radiative-transfer treatment would give.
+
+    Honesty rule (CONTRACTS-V2, binding): both spectra come from ``synth.py``,
+    our own forward model, so any accuracy difference this dilution produces is
+    a self-consistency check against a physics-based simulation, consistent with
+    the Case-2 water literature, and never independent validation on real Gulf
+    scenes.
+
+    Parameters
+    ----------
+    rrs_target
+        (n, N_BANDS) bloom-patch spectra on ``BAND_GRID``, or a single
+        (N_BANDS,) spectrum, in which case a single spectrum is returned.
+    rrs_background
+        (n, N_BANDS) surrounding-water spectra, or a single (N_BANDS,)
+        background broadcast against every target.
+    patch_size_m
+        Side length of the bloom patch in metres, passed to
+        :func:`subpixel_fill_fraction`.
+    sensor
+        A :class:`Sensor` or a key of :data:`SENSORS`.
+
+    Returns
+    -------
+    (n, N_BANDS) mixed reflectance. Because ``f`` lies in [0, 1], every mixed
+    value sits between the target and the background value at that wavelength:
+    mixing can only move a spectrum towards its surroundings, never past them.
+    At ``f == 1`` (patch at least as wide as the pixel) the target is returned
+    unchanged.
+    """
+    sen = _resolve(sensor)
+    fill = subpixel_fill_fraction(patch_size_m, sen)
+
+    target, target_was_1d = _as_2d(rrs_target, N_BANDS, "rrs_target")
+    background, _ = _as_2d(rrs_background, N_BANDS, "rrs_background")
+
+    n_rows = max(target.shape[0], background.shape[0])
+    for name, arr in (("rrs_target", target), ("rrs_background", background)):
+        if arr.shape[0] not in (1, n_rows):
+            raise ValueError(
+                f"{name} has {arr.shape[0]} rows, which broadcasts against neither "
+                f"1 nor {n_rows}: pass matching row counts or a single spectrum"
+            )
+
+    out = fill * target + (1.0 - fill) * background
+    return out[0] if (target_was_1d and out.shape[0] == 1) else out

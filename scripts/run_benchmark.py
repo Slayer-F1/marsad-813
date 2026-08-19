@@ -7,14 +7,24 @@ Usage (from the repo root):
 
 This is the experiment behind the project's central claim: standard satellite
 chlorophyll algorithms lose their footing in shallow turbid Gulf-coastal water
-while the MARSAD two-stage approach does not, and speciation collapses on any
-sensor that cannot see the 620 nm phycocyanin band. It prints three tables -
-chlorophyll retrieval error by water regime, speciation accuracy by water
-regime, and the hyperspectral sensor ablation - then the headline numbers.
+while the MARSAD two-stage approach does not, and a sensor needs BOTH a 620 nm
+phycocyanin band and a pixel small enough to hold an intake-scale bloom patch
+before it can warn a desalination intake. It prints five tables - chlorophyll
+retrieval error by water regime, speciation accuracy by water regime, the
+hyperspectral (spectral) sensor ablation, the spatial ablation of accuracy
+against bloom patch size, and the 2x2 verdict that puts the two axes together
+- then the headline numbers.
 
-A full run trains Stage 1 + Stage 2 once at full size plus once per sensor and
-takes a couple of minutes. ``--fast`` shrinks every sample count for a quick
-smoke run and, like ``scripts/run_demo.py``, writes into
+The spatial table is what makes the sensor comparison honest in both
+directions. Sentinel-3 OLCI really does carry a 620 nm band, so on band sets
+alone the margin over it is small and a judge is right to ask why not just use
+free daily OLCI; at 300 m ground sampling a 100 m patch fills about a ninth of
+one of its pixels, which is the part a spectral-only ablation never measured.
+
+A full run trains Stage 1 + Stage 2 once at full size, once per sensor, and
+once per distinct (sensor, fill fraction) cell of the spatial grid, and takes a
+few minutes. ``--fast`` cuts BOTH the patch list and every sample count for a
+quick smoke run and, like ``scripts/run_demo.py``, writes into
 ``outputs/fast-preview/`` so a weaker model can never silently replace the
 judge-facing ``dashboard/benchmark.js``.
 
@@ -29,6 +39,7 @@ import argparse
 import json
 import sys
 import textwrap
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -39,13 +50,21 @@ import numpy as np
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT / "src"))
 
-from marsad.benchmark import WATER_REGIMES, run_benchmark  # noqa: E402
-from marsad.sensors import SENSORS  # noqa: E402
+from marsad.benchmark import (  # noqa: E402
+    SPATIAL_PATCH_SIZES_M,
+    SPATIAL_TEST_CAP,
+    SPATIAL_TRAIN_CAP,
+    WATER_REGIMES,
+    has_phycocyanin_band,
+    run_benchmark,
+)
 
-#: A sensor can only see phycocyanin if it has a band this close to 620 nm.
-#: Half a typical ocean-colour band width: further away and the 620 nm
-#: absorption is averaged into the surrounding continuum.
-_PC_BAND_TOLERANCE_NM = 10.0
+#: Patch sizes for ``--fast``. The reference size of the 2x2 verdict has to
+#: stay in the list or the verdict loses its measured columns; 1000 m is the
+#: control, the size at which every sensor in the table fills its own pixel
+#: and the spatial term is switched off. Two columns is the smallest grid
+#: that still shows a slope.
+_FAST_PATCH_SIZES_M = (100.0, 1000.0)
 
 _ROUND_DP = 4  # keep benchmark.json / benchmark.js small and readable
 _WRAP = 78
@@ -79,10 +98,9 @@ def _rule(width: int) -> str:
     return "-" * width
 
 
-def _has_620_band(sensor_key: str) -> bool:
-    """True when the sensor carries a band close enough to see phycocyanin."""
-    centers = SENSORS[sensor_key].centers_nm
-    return bool(np.min(np.abs(centers - 620.0)) <= _PC_BAND_TOLERANCE_NM)
+def _fmt_patch(size_m: float) -> str:
+    """Patch size as a short column heading, e.g. ``"100 m"``."""
+    return f"{size_m:.0f} m"
 
 
 def _print_chl_table(result: dict) -> None:
@@ -139,6 +157,174 @@ def _print_ablation_table(result: dict) -> None:
             print((" " * len(head) if i else head) + line)
 
 
+def _print_spatial_grid(result: dict, metric: str, title: str, note: str) -> None:
+    """One sensor-by-patch-size table of the spatial ablation."""
+    spatial = result["spatial"]
+    sizes = spatial["patch_sizes_m"]
+    header = (f"   {'Sensor':<32}{'GSD':>8}"
+              + "".join(f"{_fmt_patch(s):>9}" for s in sizes))
+    print(f"\n   {title}")
+    print("   " + note)
+    print("\n" + header)
+    print("   " + _rule(len(header) - 3))
+    for row in spatial["sensors"].values():
+        cells = "".join(
+            f"{cell[metric]:>9.3f}" for cell in row["by_patch_size"]
+        )
+        print(f"   {row['label']:<32}{row['gsd_m']:>6.0f} m{cells}")
+
+
+def _print_spatial_table(result: dict) -> None:
+    """The spatial ablation: accuracy against bloom patch size, per sensor."""
+    spatial = result["spatial"]
+    print("\n4. SPATIAL ABLATION - same Stage 1 + Stage 2, bloom patch diluted"
+          " into the pixel")
+    print("   Each bloom pixel is mixed with the clear-water background of its own")
+    print("   scene at the fill fraction a patch of that size gets in one pixel of")
+    print("   that sensor, THEN degraded to that sensor's band set. Columns are the")
+    print("   bloom patch side length in metres; a coarse sensor loses the patch in")
+    print(f"   its own pixel. n_train={spatial['n_train']} per cell,"
+          f" n_test={spatial['n_test']}.")
+
+    _print_spatial_grid(
+        result, "fill_fraction",
+        "4a. FILL FRACTION - share of one pixel the patch covers (geometry only)",
+        "min(1, (patch / GSD)^2): halving the patch quarters the fill.",
+    )
+    _print_spatial_grid(
+        result, "accuracy",
+        "4b. SPECIATION ACCURACY - the headline metric of this table",
+        "over {no_bloom, dinoflagellate, cyanobacteria}; higher is better.",
+    )
+    _print_spatial_grid(
+        result, "cyano_recall",
+        "4c. CYANOBACTERIA RECALL - the phycocyanin-dependent class",
+        "of the pixels that ARE cyanobacteria, the share that were found.",
+    )
+    _print_spatial_grid(
+        result, "bloom_recall",
+        "4d. BLOOM DETECTION RECALL - any bloom found, species ignored",
+        "read it with 4b: see the caveat below before quoting this row.",
+    )
+    print("\n   Caveat on 4d, stated because it shapes how the row reads: the")
+    print("   background is the mean of the scene's bloom-free pixels, so a heavily")
+    print("   diluted bloom pixel lands closer to that mean than a real bloom-free")
+    print("   pixel does, and 'unnaturally average' becomes a detectable cue in")
+    print("   itself. Bloom recall can therefore stay high in cells where speciation")
+    print("   has already collapsed. Accuracy (4b) and cyanobacteria recall (4c) are")
+    print("   the metrics to quote at low fill fractions, not 4d.")
+
+
+def _print_verdict_table(result: dict) -> None:
+    """The 2x2: is this sensor adequate spectrally, spatially, both or neither?"""
+    verdict = result["verdict"]
+    ref = verdict["reference_patch_size_m"]
+    thr = verdict["fill_fraction_threshold"]
+    print(f"\n5. THE 2x2 VERDICT - can this sensor warn an intake about a"
+          f" {ref:.0f} m patch?")
+    print(f"   SPECTRAL axis: a band within {verdict['pc_band_tolerance_nm']:.0f} nm"
+          f" of {verdict['pc_band_nm']:.0f} nm, the phycocyanin")
+    print("                  absorption that is the only pigment route to"
+          " cyanobacteria.")
+    print(f"   SPATIAL axis:  a {ref:.0f} m patch fills at least {thr:.2f} of one"
+          " pixel, so the patch")
+    print("                  dominates its own measurement.")
+    print("   Both axes come from published band tables and ground sampling"
+          " distances,")
+    print("   not from our simulation. The one assumption is the 813 pixel size.")
+    header = (f"   {'Sensor':<32}{'620 nm':>8}{'GSD':>8}"
+              f"{'fill':>8}{'SPECTRAL':>10}{'SPATIAL':>9}")
+    print("\n" + header)
+    print("   " + _rule(len(header) - 3))
+    for row in verdict["sensors"].values():
+        print(f"   {row['label']:<32}"
+              f"{'yes' if row['has_620nm'] else 'no':>8}"
+              f"{row['gsd_m']:>6.0f} m"
+              f"{row['fill_fraction_at_reference']:>8.3f}"
+              f"{'PASS' if row['spectral_ok'] else 'FAIL':>10}"
+              f"{'PASS' if row['spatial_ok'] else 'FAIL':>9}")
+    print("\n   Why each sensor lands where it does:")
+    for row in verdict["sensors"].values():
+        head = f"   - {row['label']}: "
+        for i, line in enumerate(textwrap.wrap(row["reason"], _WRAP - len(head))):
+            print((" " * len(head) if i else head) + line)
+
+
+def _print_two_axis_conclusion(result: dict) -> None:
+    """The corrected conclusion, generated from the measured table."""
+    verdict = result["verdict"]
+    spatial = result["spatial"]
+    sizes = spatial["patch_sizes_m"]
+    ref = verdict["reference_patch_size_m"]
+    control = max(sizes)
+
+    print("\n  THE OLCI QUESTION - why not just use free daily Sentinel-3 OLCI?")
+    for line in textwrap.wrap(verdict["summary"], _WRAP - 4):
+        print("    " + line)
+
+    print(f"\n    Measured, same architecture throughout: a bloom patch shrunk from"
+          f"\n    {control:.0f} m (every sensor resolves it) to the {ref:.0f} m"
+          " intake scale.")
+    header = (f"    {'Sensor':<32}{'acc ' + _fmt_patch(control):>12}"
+              f"{'acc ' + _fmt_patch(ref):>12}{'drop':>8}"
+              f"{'cyano ' + _fmt_patch(ref):>14}")
+    print("\n" + header)
+    print("    " + _rule(len(header) - 4))
+    for key, row in spatial["sensors"].items():
+        cells = {c["patch_size_m"]: c for c in row["by_patch_size"]}
+        if control not in cells or ref not in cells:
+            continue
+        hi, lo = cells[control], cells[ref]
+        print(f"    {row['label']:<32}{hi['accuracy']:>12.3f}{lo['accuracy']:>12.3f}"
+              f"{lo['accuracy'] - hi['accuracy']:>+8.3f}"
+              f"{lo['cyano_recall']:>14.3f}")
+
+    # Generated from the buckets, never asserted: if a band table or a ground
+    # sampling distance changes, this sentence changes with it rather than
+    # going quietly out of date.
+    def _named(bucket: str) -> list[str]:
+        return [verdict["sensors"][k]["label"] for k in verdict[bucket]]
+
+    clauses = []
+    for bucket, one, many in (
+        ("spatial_only",
+         "resolves the patch and cannot see the pigment",
+         "resolve the patch and cannot see the pigment"),
+        ("spectral_only",
+         "sees the pigment and cannot resolve the patch",
+         "see the pigment and cannot resolve the patch"),
+        ("inadequate_on_both", "can do neither", "can do neither"),
+    ):
+        names = _named(bucket)
+        if names:
+            clauses.append(", ".join(names) + " " + (one if len(names) == 1 else many))
+    both = _named("adequate_on_both")
+    if both and clauses:
+        subject = "the sensor" if len(both) == 1 else "the sensors"
+        verb = "is" if len(both) == 1 else "are"
+        closing = (
+            "Neither axis is sufficient on its own, which is the whole point: "
+            + "; ".join(clauses)
+            + f". On this table {subject} adequate on BOTH axes at the "
+            f"{ref:.0f} m intake scale {verb}: " + ", ".join(both) + "."
+        )
+    elif both:
+        closing = (
+            f"Every sensor in this table is adequate on both axes at the "
+            f"{ref:.0f} m intake scale, so the two-axis argument does not "
+            "separate them here. Do not quote it as if it did."
+        )
+    else:
+        closing = (
+            f"On this table NO sensor is adequate on both axes at the {ref:.0f} m "
+            "intake scale, MARSAD 813 included. That is the measurement; do not "
+            "quote a two-axis advantage the numbers do not show."
+        )
+    print()
+    for line in textwrap.wrap(closing, _WRAP - 4):
+        print("    " + line)
+
+
 def _print_headline(result: dict) -> None:
     """The five numbers the pitch actually quotes."""
     h = result["headline"]
@@ -170,7 +356,7 @@ def _print_headline(result: dict) -> None:
     # by the physical property that actually decides speciation.
     native = result["ablation"]["marsad_813"]
     blind = [(k, row) for k, row in result["ablation"].items()
-             if k != "marsad_813" and not _has_620_band(k)]
+             if k != "marsad_813" and not has_phycocyanin_band(k)]
     if blind:
         best_blind_key, best_blind = max(blind, key=lambda kv: kv[1]["accuracy"])
         print(f"\n  Against the sensors with NO 620 nm band (no phycocyanin route),"
@@ -184,6 +370,9 @@ def _print_headline(result: dict) -> None:
     print("  OLCI is the one operational sensor that does carry a 620 nm band, and in")
     print("  our forward model it recovers most of the speciation signal, so the")
     print("  margin over it is small. The large, robust collapse is on the rest.")
+    print("  The gain above is a SPECTRAL number and it is not the whole comparison;")
+    print("  the spatial axis below is the half it leaves out.")
+    _print_two_axis_conclusion(result)
 
 
 def _print_honesty(result: dict) -> None:
@@ -222,26 +411,51 @@ def main(argv: list[str] | None = None) -> int:
                              "under outputs/fast-preview/ instead of the real outputs")
     args = parser.parse_args(argv)
 
+    # --fast has to cut the spatial grid as well as the sample counts: the
+    # grid costs one model fit per distinct (sensor, fill fraction) cell, so
+    # halving the patch list is worth as much as halving the pixel counts.
     if args.fast:
         n_train, n_test = 500, 400
+        patch_sizes = _FAST_PATCH_SIZES_M
+        spatial_n_train, spatial_n_test = 250, 300
         base = _REPO_ROOT / "outputs" / "fast-preview"
     else:
         n_train, n_test = 4000, 2000
+        patch_sizes = SPATIAL_PATCH_SIZES_M
+        spatial_n_train, spatial_n_test = SPATIAL_TRAIN_CAP, SPATIAL_TEST_CAP
         base = _REPO_ROOT
 
     print("MARSAD 813 - benchmark: do standard algorithms actually fail here?")
     print(_rule(_WRAP))
     print(f"seed={args.seed}  n_train={n_train}  n_test={n_test}"
           f"{'  [FAST PREVIEW]' if args.fast else ''}")
-    print("Training Stage 1 + Stage 2 once at full size and once per sensor ...")
+    print("spatial grid: patch sizes "
+          + ", ".join(_fmt_patch(p) for p in patch_sizes)
+          + f"  (n_train={spatial_n_train}, n_test={spatial_n_test} per cell)")
+    print("Training Stage 1 + Stage 2 once at full size, once per sensor, and")
+    print("once per distinct (sensor, fill fraction) cell of the spatial grid ...")
 
-    result = run_benchmark(seed=args.seed, n_train=n_train, n_test=n_test)
+    started = time.perf_counter()
+    result = run_benchmark(
+        seed=args.seed,
+        n_train=n_train,
+        n_test=n_test,
+        spatial_patch_sizes_m=patch_sizes,
+        spatial_n_train=spatial_n_train,
+        spatial_n_test=spatial_n_test,
+    )
+    elapsed = time.perf_counter() - started
 
     _print_chl_table(result)
     _print_speciation_table(result)
     _print_ablation_table(result)
+    _print_spatial_table(result)
+    _print_verdict_table(result)
     _print_headline(result)
     _print_honesty(result)
+
+    print(f"\nWall clock: {elapsed:.1f} s"
+          f"{' (fast preview)' if args.fast else ' (full run)'}")
 
     json_path, js_path = _write_outputs(result, base)
     print("\nOutputs written:")

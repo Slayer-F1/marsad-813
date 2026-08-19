@@ -27,6 +27,20 @@ MARSAD two-stage approach does not.* This module measures it three ways.
    spatial resolution. ``hyperspectral_gain`` is the accuracy of the 205-band
    813 instrument minus the best multispectral alternative.
 
+4. **The spatial ablation** (``"spatial"``) and the **two-axis verdict**
+   (``"verdict"``). A band set is only half of what an instrument can see;
+   the other half is the size of its pixel. Measurement 3 on its own
+   silently assumes every sensor resolves the bloom patch, and that is
+   false at the scale which decides whether an intake gets a warning: OLCI
+   pixels are 300 m and MODIS ocean-colour pixels are 1 km, so an
+   intake-scale patch is sub-pixel and reaches the instrument already mixed
+   with the clear water around it. :func:`run_spatial_ablation` dilutes each
+   bloom pixel into one sensor pixel before degrading it to that sensor's
+   band set, then retrains and rescores the same architecture, so the table
+   is accuracy against patch size per sensor. :func:`build_verdict` reduces
+   the two axes, a 620 nm band and a pixel small enough to hold the patch,
+   to the 2x2 that answers the OLCI question.
+
 Why the regime split is the whole point
 ---------------------------------------
 Blue-green band ratios such as OC4 assume Case-1 water, where every optical
@@ -75,6 +89,13 @@ marginally better than OLCI, whose remaining limitation is spatial, 300 m
 pixels over an intake, and is therefore not something this spectral-only
 ablation measures at all."
 
+That last clause described v0.2 and is no longer where the analysis stops.
+The ``"spatial"`` block measures exactly the term the spectral ablation
+leaves out, and the ``"verdict"`` block reports the two axes together, which
+is what makes the sensor comparison honest in BOTH directions: OLCI really
+does carry the pigment band we need, and a 100 m patch really does fill only
+about a ninth of one of its pixels.
+
 SCIENTIFIC HONESTY (binding, docs/CONTRACTS-V2.md)
 --------------------------------------------------
 Every spectrum here comes from :mod:`marsad.synth`, which is OUR OWN forward
@@ -90,9 +111,12 @@ scenes are in hand, and it has not been done yet.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import numpy as np
 
 from marsad import baselines, sensors, synth
+from marsad.spectra import N_BANDS
 from marsad.stage1_correction import ShallowWaterCorrector
 from marsad.stage2_classifier import BloomClassifier
 
@@ -101,8 +125,21 @@ __all__ = [
     "SHALLOW_DEPTH_M",
     "TURBID_TSS_G_M3",
     "ABLATION_TRAIN_CAP",
+    "SPATIAL_PATCH_SIZES_M",
+    "SPATIAL_TRAIN_CAP",
+    "SPATIAL_TEST_CAP",
+    "REFERENCE_PATCH_SIZE_M",
+    "FILL_FRACTION_THRESHOLD",
+    "PC_BAND_NM",
+    "PC_BAND_TOLERANCE_NM",
     "HONESTY_NOTE",
+    "SPATIAL_NOTE",
+    "VERDICT_NOTE",
     "classify_regime",
+    "nearest_band_distance_nm",
+    "has_phycocyanin_band",
+    "run_spatial_ablation",
+    "build_verdict",
     "run_benchmark",
 ]
 
@@ -378,10 +415,631 @@ def _degrade(rrs: np.ndarray, sensor_key: str) -> np.ndarray:
     return sensors.resample_to_grid(sensors.resample(rrs, sensor_key), sensor_key)
 
 
+# --- TEAM DECISION ---
+# The spatial ablation grid, in metres of bloom-patch side length.
+#
+# 50 m is below every pixel in the table except the 30 m class, so it is the
+# column where even Landsat and the 813 assumption start to be tested. 100 m is
+# the intake scale this project is built around. 300 m and 1000 m are exactly
+# the OLCI and MODIS pixel sizes, so those columns sit on the "patch just fills
+# the pixel" boundary for those two sensors and make the transition legible
+# rather than hidden between decades. 3000 m is a regional slick that every
+# sensor in the table resolves outright, and it is the control column: the
+# spatial term is switched off there and only the band set is left.
+SPATIAL_PATCH_SIZES_M: tuple[float, ...] = (50.0, 100.0, 300.0, 1000.0, 3000.0)
+
+# Reference patch size for the 2x2 verdict: the size of bloom patch a
+# desalination intake actually has to be warned about. Intake structures and
+# the water parcel drawn through them are tens to a couple of hundred metres
+# across, so 100 m is the round figure in the middle of that range. This is an
+# operational definition, not a physical constant, and it is meant to be
+# retuned per site.
+REFERENCE_PATCH_SIZE_M: float = 100.0
+
+# A sensor counts as spatially adequate when the patch fills at least this much
+# of one pixel. At 0.5 the patch contributes more to the pixel's spectrum than
+# its surroundings do; below it the pixel is mostly background water and the
+# bloom is a minority term in its own measurement.
+FILL_FRACTION_THRESHOLD: float = 0.5
+
+# The phycocyanin absorption feature, and how close a band has to sit to see
+# it. 10 nm is about half a typical ocean-colour band width: further away and
+# the 620 nm absorption is averaged into the surrounding continuum rather than
+# measured.
+PC_BAND_NM: float = 620.0
+PC_BAND_TOLERANCE_NM: float = 10.0
+
+# Multiplicative sensor-noise level re-applied to the mixed pixel, matching the
+# 1-2 % per-pixel noise that marsad.synth already puts on rrs_observed. See
+# _dilute for why re-applying it is not optional.
+SPATIAL_NOISE_FRAC: tuple[float, float] = (0.01, 0.02)
+# --- END TEAM DECISION ---
+
+#: Training pixels per cell of the spatial grid, reduced from
+#: :data:`ABLATION_TRAIN_CAP` because the spatial ablation is a GRID: every
+#: sensor is retrained at every patch size, so the cost grows with the area of
+#: the table rather than the length of the sensor list. 900 is adequate for
+#: what this grid measures, for two reasons. First, the quantity of interest is
+#: the DIFFERENCE between cells of one row, and every cell is trained at
+#: exactly the same size, so the cap moves all cells together and cannot
+#: manufacture the ordering the grid exists to measure. Second, the effect
+#: being measured is enormous next to the training-size effect: diluting a
+#: patch to one percent of a MODIS pixel costs tens of points of accuracy,
+#: while the training-size difference between this cap and the 1200-pixel
+#: spectral ablation cap moves the 813 arm by a fraction of a point.
+SPATIAL_TRAIN_CAP: int = 900
+
+#: Test pixels per cell of the spatial grid. Recall of the cyanobacteria class
+#: is estimated on roughly a quarter of these, so 1200 keeps that estimate on a
+#: few hundred pixels rather than a few dozen.
+SPATIAL_TEST_CAP: int = 1200
+
+SPATIAL_NOTE: str = (
+    "Spatial ablation: each bloom pixel is diluted into one sensor pixel by "
+    "linear sub-pixel mixing with the clear-water background of its own scene "
+    "before the spectra are degraded to that sensor's band set, so a coarse "
+    "instrument is scored on the mixed signal it would actually receive from "
+    "an intake-scale patch instead of on a patch it is assumed to resolve. "
+    "Both the patch spectra and the background come from marsad.synth, our own "
+    "forward model, so this is a self-consistency check against a physics-based "
+    "simulation, consistent with the Case-2 water literature, and never "
+    "independent validation on real Gulf scenes."
+)
+
+VERDICT_NOTE: str = (
+    "Two axes decide whether a sensor can warn a desalination intake about an "
+    "intake-scale bloom. SPECTRAL: does it carry a band within "
+    "{tol:.0f} nm of the {pc:.0f} nm phycocyanin absorption, the only pigment "
+    "route to cyanobacteria. SPATIAL: does a patch of the reference size fill "
+    "at least the threshold fraction of one of its pixels. The spectral axis "
+    "is read off the published band table and the spatial axis off the "
+    "published ground sampling distance, so both are facts about the "
+    "instruments rather than results of our simulation; the one exception is "
+    "the 813 ground sampling distance, which is an explicit assumption. What "
+    "our simulation supplies is the accuracy each combination actually "
+    "achieves, and that part is a self-consistency check on our own forward "
+    "model, never independent validation on real Gulf scenes."
+).format(tol=PC_BAND_TOLERANCE_NM, pc=PC_BAND_NM)
+
+
+def nearest_band_distance_nm(
+    sensor: sensors.Sensor | str, target_nm: float = PC_BAND_NM
+) -> float:
+    """Distance in nm from ``target_nm`` to the closest band centre of a sensor.
+
+    The spectral half of the verdict in one number. A sensor cannot measure an
+    absorption feature it has no band on top of: the interpolation in
+    :func:`marsad.sensors.resample_to_grid` draws a straight line across the
+    gap, so a 620 nm dip lying between a 560 nm and a 665 nm band is not
+    attenuated, it is absent.
+    """
+    sen = sensors.SENSORS[sensor] if isinstance(sensor, str) else sensor
+    return float(np.min(np.abs(sen.centers_nm - float(target_nm))))
+
+
+def has_phycocyanin_band(sensor: sensors.Sensor | str) -> bool:
+    """True when the sensor carries a band close enough to see phycocyanin.
+
+    "Close enough" is :data:`PC_BAND_TOLERANCE_NM` from :data:`PC_BAND_NM`. Of
+    the operational ocean-colour sensors in :data:`marsad.sensors.SENSORS` only
+    Sentinel-3 OLCI passes, which is exactly why the spectral ablation on its
+    own cannot answer "why not just use free daily OLCI?" and why the spatial
+    axis has to be measured alongside it.
+    """
+    return bool(nearest_band_distance_nm(sensor) <= PC_BAND_TOLERANCE_NM)
+
+
+def _bloom_recall(pred: np.ndarray, true: np.ndarray) -> float:
+    """Of the pixels carrying ANY bloom, the fraction flagged as some bloom.
+
+    Coarser than :func:`_recall` on the cyanobacteria class, and deliberately
+    so: this is the detection question, "is there a bloom heading for the
+    intake at all", stripped of the speciation question, "which one". A sensor
+    can pass this and still fail the operator, because the response to a toxic
+    cyanobacteria bloom is not the response to a dinoflagellate one.
+    """
+    mask = np.asarray(true) != 0
+    if not np.any(mask):
+        return 0.0
+    return float(np.mean(np.asarray(pred)[mask] != 0))
+
+
+def _false_alarm_rate(pred: np.ndarray, true: np.ndarray) -> float:
+    """Fraction of genuinely bloom-free pixels that were flagged as blooming.
+
+    Reported next to :func:`_bloom_recall` so that a high recall can be read
+    for what it is. Recall on its own is trivially gamed by flagging
+    everything, and this pair is the check on that. It also documents something
+    the measurement actually shows: the diluted arms keep their bloom recall
+    high WITHOUT paying in false alarms, which is not the ordinary
+    recall-against-precision trade but the constant-background artifact
+    described in :func:`_clear_water_background`. Either way, a bloom recall of
+    1.000 at a fill fraction of 0.03 is not evidence of a working sensor;
+    accuracy and cyanobacteria recall are.
+    """
+    mask = np.asarray(true) == 0
+    if not np.any(mask):
+        return 0.0
+    return float(np.mean(np.asarray(pred)[mask] != 0))
+
+
+def _slice_dataset(dataset: synth.SynthDataset, n_rows: int) -> synth.SynthDataset:
+    """First ``n_rows`` pixels of a scene, or the scene itself if it is shorter."""
+    n = int(n_rows)
+    if n >= dataset.labels.size:
+        return dataset
+    return synth.SynthDataset(
+        rrs_observed=dataset.rrs_observed[:n],
+        rrs_true=dataset.rrs_true[:n],
+        labels=dataset.labels[:n],
+        chl=dataset.chl[:n],
+        tss=dataset.tss[:n],
+        depth_m=dataset.depth_m[:n],
+        phycocyanin=dataset.phycocyanin[:n],
+    )
+
+
+def _clear_water_background(
+    rrs_observed: np.ndarray, labels: np.ndarray, what: str
+) -> np.ndarray:
+    """Mean observed spectrum of the scene's own bloom-free pixels.
+
+    Why this is the right background, rather than an idealised clear-water
+    spectrum out of a textbook: the water that shares a pixel with an
+    intake-scale bloom patch IS the surrounding water of the same body, with
+    the same depth distribution, the same suspended sediment, the same sun
+    glint and the same atmospheric residual. The scene's own ``no_bloom``
+    pixels are precisely our sample of that water, so mixing into their mean
+    dilutes the bloom towards its real neighbourhood. Importing an external
+    clear-water spectrum would change the water body at the same time as the
+    patch size, and the two effects could no longer be told apart.
+
+    The MEAN rather than a per-pixel draw, for two reasons. It makes the
+    dilution deterministic, so a cell of the grid is a function of the patch
+    size and the band set alone. And it gives every sensor the identical
+    background, so no arm can win or lose on a luckier neighbourhood.
+
+    The cost of that choice is stated plainly here because it shapes the
+    numbers, and it flatters the coarse sensors rather than us. A constant
+    background means a heavily diluted bloom pixel lands very close to the
+    scene mean, closer than a typical genuine ``no_bloom`` pixel, whose depth
+    and sediment vary. A classifier can learn that "unnaturally average" is
+    itself a cue. That is why the diluted arms hold BLOOM DETECTION recall at
+    or near 1.000, and hold it without any rise in false alarms, in the same
+    cells where cyanobacteria recall and overall accuracy have already
+    collapsed: Sentinel-3 OLCI at a fill fraction of 0.028 keeps a bloom recall
+    of 1.000 while its cyanobacteria recall falls to about 0.28. Bloom recall
+    must therefore not be quoted at low fill fractions. Accuracy and
+    cyanobacteria recall are the metrics that carry the result there, and they
+    are the ones the verdict and the headline use.
+    """
+    mask = np.asarray(labels) == 0
+    if not np.any(mask):
+        raise ValueError(
+            f"the {what} scene has no no_bloom pixels, so it carries no "
+            "clear-water background to dilute a patch into; enlarge the scene "
+            "or lower the bloom fraction"
+        )
+    return np.asarray(rrs_observed, dtype=np.float64)[mask].mean(axis=0)
+
+
+def _instrument_noise(n_rows: int, seed: int) -> np.ndarray:
+    """(n_rows, N_BANDS) multiplicative sensor-noise field, drawn once per scene.
+
+    Drawn once and reused for every cell of the grid, so that the only things
+    changing from cell to cell are the fill fraction and the band set. Two
+    cells with the same fill fraction therefore receive bit-identical inputs,
+    which is what makes the memoisation in :func:`run_spatial_ablation` an
+    exact reuse rather than an approximation.
+    """
+    rng = np.random.default_rng(int(seed))
+    n = int(n_rows)
+    lo, hi = SPATIAL_NOISE_FRAC
+    sigma = rng.uniform(lo, hi, size=n)[:, None]
+    return 1.0 + sigma * rng.standard_normal((n, N_BANDS))
+
+
+def _dilute(
+    rrs_observed: np.ndarray,
+    labels: np.ndarray,
+    background: np.ndarray,
+    patch_size_m: float,
+    sensor_key: str,
+    noise: np.ndarray,
+) -> np.ndarray:
+    """Mix each bloom pixel into one sensor pixel, then re-apply sensor noise.
+
+    Only pixels that carry a bloom are mixed. The bloom is the localised
+    feature here: a patch of order a hundred metres across sitting in water
+    that is otherwise ordinary. The properties that make a bloom-free pixel
+    what it is, depth over a sandy bottom and a resuspended sediment plume,
+    vary on kilometre scales instead, so they survive a coarse pixel and there
+    is nothing to dilute them into. Mixing them towards the scene mean as well
+    would model a coarse sensor as also blind to bathymetry and turbidity,
+    which is not the claim under test.
+
+    Re-applying the instrument noise afterwards is NOT cosmetic, it is what
+    makes the experiment measure anything at all. Linear mixing against a
+    constant background is exactly invertible, ``target = (mixed - (1 - f) *
+    background) / f``, and the standardisation in front of both stages would
+    undo the factor ``f`` on its own. Without a noise floor that stays put
+    while the patch signal shrinks, a fill fraction of 0.0025 would cost
+    nothing and this grid would report that pixel size does not matter. The
+    physical statement behind the fix is simple: the instrument's noise
+    attaches to the PIXEL, not to the patch, so a patch contributing one
+    percent of the pixel signal is measured against the full pixel's noise. The
+    level, 1-2 % multiplicative, is the level marsad.synth already uses.
+
+    The price is that a full-fill cell of this grid carries one more noise
+    realisation than the corresponding row of the spectral-only ``"ablation"``
+    block, so the two blocks must not be compared cell for cell. Every cell of
+    THIS grid carries that same extra realisation, so comparisons inside the
+    grid, which is where the result lives, stay controlled.
+    """
+    out = np.array(rrs_observed, dtype=np.float64, copy=True)
+    bloom = np.asarray(labels) != 0
+    if np.any(bloom):
+        out[bloom] = sensors.mix_subpixel(
+            out[bloom], background, patch_size_m, sensor_key
+        )
+    return np.clip(out * noise, 0.0, None)
+
+
+def run_spatial_ablation(
+    seed: int = 11,
+    n_train: int = SPATIAL_TRAIN_CAP,
+    n_test: int = SPATIAL_TEST_CAP,
+    patch_sizes_m: Sequence[float] = SPATIAL_PATCH_SIZES_M,
+    sensor_keys: Sequence[str] | None = None,
+    train: synth.SynthDataset | None = None,
+    test: synth.SynthDataset | None = None,
+) -> dict:
+    """Retrain the MARSAD architecture once per (sensor, bloom patch size) cell.
+
+    The spectral ablation in :func:`run_benchmark` silently assumes every
+    sensor resolves the bloom patch. That assumption is false at the scale that
+    decides whether an intake gets a warning: OLCI pixels are 300 m and MODIS
+    ocean-colour pixels are 1 km, so a 100 m patch is sub-pixel and reaches the
+    instrument already mixed with the clear water around it. This function adds
+    the missing term, and it cuts in both directions. It is the reason the
+    honest answer to "why not just use free daily OLCI?" is not "because it
+    cannot see phycocyanin", which would be false, but "because at 300 m it
+    sees an intake-scale patch diluted about nine to one".
+
+    Method, per cell
+    ----------------
+    1. Take the clear-water background as the mean observed spectrum of that
+       scene's own bloom-free pixels (:func:`_clear_water_background`).
+    2. Dilute every bloom pixel into one sensor pixel with
+       :func:`marsad.sensors.mix_subpixel` at this patch size, then re-apply
+       the instrument's 1-2 % noise to the mixed pixel (:func:`_dilute`).
+    3. Degrade the result to the sensor's band set and lift it back onto the
+       813 grid (:func:`_degrade`), so the model input width never changes.
+    4. Refit Stage 1 + Stage 2 from scratch (:func:`_fit_pipeline`) against the
+       SAME full-resolution clean Stage 1 target every other arm is held to,
+       and score the test scene the same way.
+
+    The order matters and is the physical one: the patch is mixed into the
+    pixel at the sea surface, and the spectral response function integrates
+    whatever arrives at the aperture afterwards.
+
+    The Stage 1 target stays the unmixed, full-resolution clean spectrum for
+    every cell, exactly as in the spectral ablation. The product Stage 2
+    consumes does not change when the pixel gets coarser, and scoring a diluted
+    arm against a diluted target would quietly redefine the deliverable per
+    cell and hide the very information loss this grid exists to measure.
+
+    Cells whose fill fraction is identical receive bit-identical inputs by
+    construction, because the noise field is drawn once per scene, so the fit
+    is computed once and reused. That is memoisation, not approximation: on the
+    default grid it turns 25 model fits into 10.
+
+    Parameters
+    ----------
+    seed:
+        Master seed. Scenes generated here use ``seed`` and ``seed + 1``,
+        matching :func:`run_benchmark`, and the noise fields use offsets of it.
+    n_train, n_test:
+        Pixels per cell. Defaults :data:`SPATIAL_TRAIN_CAP` and
+        :data:`SPATIAL_TEST_CAP`; when ``train`` or ``test`` is supplied these
+        act as caps on the supplied scene instead.
+    patch_sizes_m:
+        Bloom patch side lengths in metres. Default
+        :data:`SPATIAL_PATCH_SIZES_M`.
+    sensor_keys:
+        Subset of :data:`marsad.sensors.SENSORS` to run. Default: all of them.
+    train, test:
+        Optional pre-generated scenes, so :func:`run_benchmark` can score this
+        grid on the very same pixels as the spectral ablation instead of on an
+        independent draw.
+
+    Returns
+    -------
+    dict
+        ``{"patch_sizes_m": [...], "n_train": int, "n_test": int,
+        "sensors": {key: {"label", "gsd_m", "n_bands", "has_620nm",
+        "by_patch_size": [{"patch_size_m", "fill_fraction", "accuracy",
+        "cyano_recall", "bloom_recall", "false_alarm_rate"}, ...]}},
+        "note": str}``. ``by_patch_size`` follows the order of
+        ``patch_sizes_m``.
+
+    Honesty (binding, docs/CONTRACTS-V2.md): every spectrum mixed here, patch
+    and background alike, comes from :mod:`marsad.synth`, our own forward
+    model. This grid is a self-consistency check against a physics-based
+    simulation, consistent with the Case-2 water literature, and it is never
+    independent validation of how OLCI or MODIS behave on real Gulf water. The
+    ground sampling distances are published instrument specifications, with the
+    single documented exception of the 813 figure
+    (:data:`marsad.sensors.ASSUMED_813_GSD_M`, an assumption); the accuracies
+    are simulation.
+    """
+    keys = tuple(sensor_keys) if sensor_keys is not None else tuple(sensors.SENSORS)
+    if not keys:
+        raise ValueError("sensor_keys is empty: nothing to ablate")
+    for key in keys:
+        if key not in sensors.SENSORS:
+            raise KeyError(
+                f"unknown sensor key {key!r}; known keys: {sorted(sensors.SENSORS)}"
+            )
+
+    sizes = tuple(float(p) for p in patch_sizes_m)
+    if not sizes:
+        raise ValueError("patch_sizes_m is empty: nothing to ablate")
+    for size in sizes:
+        if not np.isfinite(size) or size <= 0.0:
+            raise ValueError(
+                f"patch_sizes_m must be positive, finite metres, got {size!r}"
+            )
+
+    train_scene = (
+        _slice_dataset(train, int(n_train))
+        if train is not None
+        else synth.generate_dataset(int(n_train), seed=seed)
+    )
+    test_scene = (
+        _slice_dataset(test, int(n_test))
+        if test is not None
+        else synth.generate_dataset(int(n_test), seed=seed + 1)
+    )
+    n_tr = int(train_scene.labels.size)
+    n_te = int(test_scene.labels.size)
+
+    background_train = _clear_water_background(
+        train_scene.rrs_observed, train_scene.labels, "training"
+    )
+    background_test = _clear_water_background(
+        test_scene.rrs_observed, test_scene.labels, "test"
+    )
+    noise_train = _instrument_noise(n_tr, seed=seed + 7001)
+    noise_test = _instrument_noise(n_te, seed=seed + 7002)
+
+    out: dict[str, dict] = {}
+    for key in keys:
+        sensor = sensors.SENSORS[key]
+        by_fill: dict[float, dict] = {}
+        rows: list[dict] = []
+        for size in sizes:
+            fill = sensors.subpixel_fill_fraction(size, sensor)
+            scored = by_fill.get(fill)
+            if scored is None:
+                x_train = _degrade(
+                    _dilute(
+                        train_scene.rrs_observed,
+                        train_scene.labels,
+                        background_train,
+                        size,
+                        key,
+                        noise_train,
+                    ),
+                    key,
+                )
+                x_test = _degrade(
+                    _dilute(
+                        test_scene.rrs_observed,
+                        test_scene.labels,
+                        background_test,
+                        size,
+                        key,
+                        noise_test,
+                    ),
+                    key,
+                )
+                corrector, classifier = _fit_pipeline(
+                    x_train,
+                    train_scene.rrs_true,
+                    train_scene.labels,
+                    train_scene.chl,
+                    seed,
+                )
+                pred = classifier.predict(corrector.transform(x_test))
+                scored = {
+                    "accuracy": _accuracy(pred, test_scene.labels),
+                    "cyano_recall": _recall(pred, test_scene.labels, 2),
+                    "bloom_recall": _bloom_recall(pred, test_scene.labels),
+                    "false_alarm_rate": _false_alarm_rate(pred, test_scene.labels),
+                }
+                by_fill[fill] = scored
+            rows.append(
+                {"patch_size_m": float(size), "fill_fraction": float(fill), **scored}
+            )
+        out[key] = {
+            "label": sensor.label,
+            "gsd_m": float(sensor.gsd_m),
+            "n_bands": int(sensor.n_bands),
+            "has_620nm": has_phycocyanin_band(sensor),
+            "by_patch_size": rows,
+        }
+
+    return {
+        "patch_sizes_m": [float(s) for s in sizes],
+        "n_train": n_tr,
+        "n_test": n_te,
+        "sensors": out,
+        "note": SPATIAL_NOTE,
+    }
+
+
+def build_verdict(
+    spatial: dict | None = None,
+    reference_patch_size_m: float = REFERENCE_PATCH_SIZE_M,
+    fill_fraction_threshold: float = FILL_FRACTION_THRESHOLD,
+    sensor_keys: Sequence[str] | None = None,
+) -> dict:
+    """Classify every sensor on the spectral axis and on the spatial axis.
+
+    This is the 2x2 that actually answers "why not just use free daily
+    Sentinel-3 OLCI?", a question the spectral ablation on its own invites and
+    cannot settle. Both axes are read off published instrument tables rather
+    than out of our simulation:
+
+    * SPECTRAL: does the sensor carry a band within
+      :data:`PC_BAND_TOLERANCE_NM` of the :data:`PC_BAND_NM` phycocyanin
+      absorption, the only pigment route to separating cyanobacteria from
+      other blooms (:func:`has_phycocyanin_band`).
+    * SPATIAL: does a patch of ``reference_patch_size_m`` fill at least
+      ``fill_fraction_threshold`` of one pixel
+      (:func:`marsad.sensors.subpixel_fill_fraction`).
+
+    The single assumption in the whole table is the 813 ground sampling
+    distance (:data:`marsad.sensors.ASSUMED_813_GSD_M`, 30 m), which is not a
+    published figure and is flagged as an assumption wherever it appears.
+
+    When ``spatial`` is a result of :func:`run_spatial_ablation` that includes
+    the reference patch size, the measured accuracy and cyanobacteria recall at
+    that patch size are attached to each sensor, so the verdict can be read
+    against the numbers instead of being taken on geometry alone. Those two
+    fields are ``None`` when no such measurement is available.
+
+    Returns
+    -------
+    dict
+        ``{"reference_patch_size_m", "fill_fraction_threshold", "pc_band_nm",
+        "pc_band_tolerance_nm", "sensors": {key: {"label", "has_620nm",
+        "gsd_m", "fill_fraction_at_reference", "spectral_ok", "spatial_ok",
+        "accuracy_at_reference", "cyano_recall_at_reference", "reason"}},
+        "adequate_on_both", "spectral_only", "spatial_only",
+        "inadequate_on_both", "summary", "note"}``.
+
+    The ``summary`` sentence is generated from the booleans actually computed,
+    never asserted, so if a band table or a ground sampling distance changes
+    the sentence changes with it.
+    """
+    keys = tuple(sensor_keys) if sensor_keys is not None else tuple(sensors.SENSORS)
+    reference = float(reference_patch_size_m)
+    threshold = float(fill_fraction_threshold)
+
+    measured: dict[str, dict] = {}
+    if spatial:
+        for key, row in spatial.get("sensors", {}).items():
+            for cell in row.get("by_patch_size", ()):
+                if float(cell["patch_size_m"]) == reference:
+                    measured[key] = cell
+                    break
+
+    buckets: dict[str, list[str]] = {
+        "adequate_on_both": [],
+        "spectral_only": [],
+        "spatial_only": [],
+        "inadequate_on_both": [],
+    }
+    out: dict[str, dict] = {}
+    for key in keys:
+        sensor = sensors.SENSORS[key]
+        gap = nearest_band_distance_nm(sensor)
+        fill = sensors.subpixel_fill_fraction(reference, sensor)
+        spectral_ok = bool(gap <= PC_BAND_TOLERANCE_NM)
+        spatial_ok = bool(fill >= threshold)
+
+        if spectral_ok:
+            spectral_txt = (
+                f"carries a band {gap:.0f} nm from the {PC_BAND_NM:.0f} nm "
+                "phycocyanin line, so speciation is spectrally possible"
+            )
+        else:
+            spectral_txt = (
+                f"has no band nearer than {gap:.0f} nm to {PC_BAND_NM:.0f} nm, "
+                "so phycocyanin is interpolated straight over and cyanobacteria "
+                "cannot be separated on pigment absorption"
+            )
+        if spatial_ok:
+            spatial_txt = (
+                f"a {sensor.gsd_m:.0f} m pixel is filled {fill:.2f} by a "
+                f"{reference:.0f} m patch, so the patch dominates its own "
+                "measurement"
+            )
+        else:
+            spatial_txt = (
+                f"a {sensor.gsd_m:.0f} m pixel is filled only {fill:.3f} by a "
+                f"{reference:.0f} m patch, so the reading is dominated by the "
+                "surrounding water"
+            )
+        if spectral_ok and spatial_ok:
+            headline, bucket = "adequate on both axes", "adequate_on_both"
+        elif spectral_ok:
+            headline, bucket = "spectrally adequate, spatially not", "spectral_only"
+        elif spatial_ok:
+            headline, bucket = "spatially adequate, spectrally not", "spatial_only"
+        else:
+            headline, bucket = "inadequate on both axes", "inadequate_on_both"
+        buckets[bucket].append(key)
+
+        connector = "and" if spectral_ok == spatial_ok else "but"
+        cell = measured.get(key)
+        out[key] = {
+            "label": sensor.label,
+            "has_620nm": spectral_ok,
+            "gsd_m": float(sensor.gsd_m),
+            "fill_fraction_at_reference": float(fill),
+            "spectral_ok": spectral_ok,
+            "spatial_ok": spatial_ok,
+            "accuracy_at_reference": (
+                float(cell["accuracy"]) if cell is not None else None
+            ),
+            "cyano_recall_at_reference": (
+                float(cell["cyano_recall"]) if cell is not None else None
+            ),
+            "reason": f"{headline}: {spectral_txt}, {connector} {spatial_txt}.",
+        }
+
+    def _named(bucket: str) -> str:
+        names = [out[k]["label"] for k in buckets[bucket]]
+        return ", ".join(names) if names else "none"
+
+    summary = (
+        f"At a {reference:.0f} m reference patch and a {threshold:.2f} fill "
+        f"threshold: adequate on both axes: {_named('adequate_on_both')}; "
+        "spectrally adequate but too coarse to resolve the patch: "
+        f"{_named('spectral_only')}; fine enough to resolve the patch but blind "
+        f"to {PC_BAND_NM:.0f} nm: {_named('spatial_only')}; inadequate on both "
+        f"axes: {_named('inadequate_on_both')}."
+    )
+
+    return {
+        "reference_patch_size_m": reference,
+        "fill_fraction_threshold": threshold,
+        "pc_band_nm": PC_BAND_NM,
+        "pc_band_tolerance_nm": PC_BAND_TOLERANCE_NM,
+        "sensors": out,
+        **buckets,
+        "summary": summary,
+        "note": VERDICT_NOTE,
+    }
+
+
 # ------------------------------------------------------------------ experiment
 
 
-def run_benchmark(seed: int = 11, n_train: int = 4000, n_test: int = 2000) -> dict:
+def run_benchmark(
+    seed: int = 11,
+    n_train: int = 4000,
+    n_test: int = 2000,
+    *,
+    spatial_patch_sizes_m: Sequence[float] = SPATIAL_PATCH_SIZES_M,
+    spatial_n_train: int = SPATIAL_TRAIN_CAP,
+    spatial_n_test: int = SPATIAL_TEST_CAP,
+    reference_patch_size_m: float = REFERENCE_PATCH_SIZE_M,
+    fill_fraction_threshold: float = FILL_FRACTION_THRESHOLD,
+) -> dict:
     """Run the full comparison and return the contracted result dictionary.
 
     Method
@@ -394,6 +1052,10 @@ def run_benchmark(seed: int = 11, n_train: int = 4000, n_test: int = 2000) -> di
     4. Retrain the same architecture once per sensor on spectra degraded to
        that sensor's band set, against the same full-resolution Stage 1
        target, and score accuracy plus cyanobacteria recall.
+    5. Run the spatial ablation (:func:`run_spatial_ablation`) on the same
+       pixels, which dilutes each bloom pixel into one sensor pixel before
+       the band-set degradation, and reduce the spectral and spatial axes
+       to the 2x2 verdict (:func:`build_verdict`).
 
     Parameters
     ----------
@@ -405,12 +1067,27 @@ def run_benchmark(seed: int = 11, n_train: int = 4000, n_test: int = 2000) -> di
         ``min(n_train, ABLATION_TRAIN_CAP)`` pixels each, identically.
     n_test:
         Pixels in the natural test draw, before the per-regime top-up.
+    spatial_patch_sizes_m:
+        Bloom patch side lengths in metres for the spatial grid. Default
+        :data:`SPATIAL_PATCH_SIZES_M`. Shrink it to make a run cheap: the
+        grid costs one model fit per distinct (sensor, fill fraction) pair.
+    spatial_n_train, spatial_n_test:
+        Caps on the pixels each spatial cell trains and scores on. The
+        spatial grid reuses the scenes generated above rather than drawing
+        its own, so its cells sit on the same pixels as the spectral
+        ablation and the two tables are directly comparable.
+    reference_patch_size_m, fill_fraction_threshold:
+        The two documented thresholds behind the 2x2 verdict: the
+        intake-scale patch a sensor is asked to resolve, and the share of
+        one pixel it has to fill to count as resolved.
 
     Returns
     -------
     dict
-        Exactly the five keys of docs/CONTRACTS-V2.md: ``chl_retrieval``,
-        ``speciation``, ``ablation``, ``headline`` and ``honesty_note``.
+        The five keys of docs/CONTRACTS-V2.md unchanged: ``chl_retrieval``,
+        ``speciation``, ``ablation``, ``headline`` and ``honesty_note``,
+        plus two additive blocks introduced after v0.2, ``spatial`` and
+        ``verdict``. Nothing in the original five moved or changed meaning.
         Errors in ``chl_retrieval`` are median absolute log10 errors (lower is
         better), values in ``speciation`` and ``ablation`` are fractions in
         [0, 1] (higher is better), and ``hyperspectral_gain`` is a difference
@@ -502,10 +1179,31 @@ def run_benchmark(seed: int = 11, n_train: int = 4000, n_test: int = 2000) -> di
         "hyperspectral_gain": float(native_acc - best_multispectral),
     }
 
+    # --- 6. the spatial ablation and the two-axis verdict -------------------
+    # Scored on the SAME scenes as everything above, capped, and on the
+    # natural test draw only (rows [:n_base]) for the same reason the
+    # spectral ablation uses it: the per-regime top-up must not tilt a
+    # scene-level accuracy.
+    spatial = run_spatial_ablation(
+        seed=seed,
+        n_train=min(int(n_train), int(spatial_n_train)),
+        n_test=min(int(n_base), int(spatial_n_test)),
+        patch_sizes_m=spatial_patch_sizes_m,
+        train=train,
+        test=_slice_dataset(test, n_base),
+    )
+    verdict = build_verdict(
+        spatial=spatial,
+        reference_patch_size_m=reference_patch_size_m,
+        fill_fraction_threshold=fill_fraction_threshold,
+    )
+
     return {
         "chl_retrieval": chl_retrieval,
         "speciation": speciation,
         "ablation": ablation,
         "headline": headline,
         "honesty_note": HONESTY_NOTE,
+        "spatial": spatial,
+        "verdict": verdict,
     }

@@ -217,6 +217,70 @@ ul.snotes b{color:var(--ink);font-weight:600}
 .tagpc{font-family:var(--mono);font-size:10.5px;font-weight:600;margin-left:7px;white-space:nowrap}
 .tagpc.yes{color:var(--st-green)}
 .tagpc.no{color:var(--st-red)}
+
+/* ---------- 03 - two-axis sensor verdict (v0.2 spatial ablation) ----------
+   The section stacks three panels: the pass/fail matrix, the patch-size
+   collapse chart, then the original spectral bar chart kept as support. */
+/* minmax(0,1fr) + min-width:0 because a grid item's automatic minimum size is
+   its MIN-CONTENT size, and these panels hold deliberately wide inner tables
+   and charts. Without both, the min-width:700px table below would widen the
+   track and push the whole page into a horizontal scroll on a phone instead
+   of scrolling inside its own .vt-wrap box. */
+.pstack{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.pstack > .panel{min-width:0}
+.qm-wrap{overflow-x:auto}
+table.qm{border-collapse:separate;border-spacing:8px;width:100%;min-width:560px;margin:2px 0 4px}
+table.qm th{font-size:10px;letter-spacing:.10em;font-weight:700;color:var(--ink2);
+  padding:2px 4px;vertical-align:bottom;text-align:center}
+table.qm th.rowh{text-align:right;vertical-align:middle;width:172px}
+table.qm th span{display:block;font-size:10.5px;letter-spacing:0;font-weight:400;
+  color:var(--ink3);margin-top:3px;line-height:1.35}
+table.qm td.q{border:1px solid;border-radius:10px;padding:11px 13px;vertical-align:top;width:50%}
+table.qm td.q.ok{border-color:rgba(12,163,12,.55);background:rgba(12,163,12,.10)}
+table.qm td.q.half{border-color:rgba(250,178,25,.50);background:rgba(250,178,25,.07)}
+table.qm td.q.bad{border-color:rgba(208,59,59,.55);background:rgba(208,59,59,.10)}
+.q-lab{display:flex;align-items:center;gap:7px;font-size:10px;letter-spacing:.09em;font-weight:700}
+.q-lab .g{font-size:11px;line-height:1;flex:none}
+td.q.ok .q-lab{color:var(--st-green)}
+td.q.half .q-lab{color:var(--st-amber)}
+td.q.bad .q-lab{color:var(--st-red)}
+.q-s{margin-top:9px;font-size:12.5px;color:var(--ink);font-weight:600}
+.q-s .m{display:block;font-family:var(--mono);font-size:10.5px;font-weight:400;
+  color:var(--ink3);margin-top:2px;line-height:1.45}
+.q-empty{margin-top:9px;font-size:12px;color:var(--ink3)}
+.vp{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.07em;
+  border:1px solid;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.vp .g{font-size:10px;line-height:1}
+.vp.pass{color:var(--st-green);border-color:rgba(12,163,12,.55);background:rgba(12,163,12,.12)}
+.vp.fail{color:var(--st-red);border-color:rgba(208,59,59,.60);background:rgba(208,59,59,.14)}
+.vt-wrap{overflow-x:auto;margin-top:14px}
+table.vt{border-collapse:collapse;width:100%;min-width:700px;font-size:12.5px}
+table.vt th,table.vt td{padding:7px 10px;text-align:right;white-space:nowrap}
+table.vt th{color:var(--ink3);font-size:10px;letter-spacing:.08em;font-weight:700;
+  border-bottom:1px solid var(--border);vertical-align:bottom}
+table.vt td{font-family:var(--mono);color:var(--ink2);border-top:1px solid var(--grid)}
+table.vt td:first-child,table.vt th:first-child{text-align:left;font-family:inherit;
+  color:var(--ink);font-weight:600;white-space:normal}
+table.vt td.c,table.vt th.c{text-align:center}
+table.vt tr.me td{background:rgba(47,191,174,.07)}
+table.vt tr.me td:first-child{color:var(--accent)}
+.asu{display:inline-block;font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.05em;
+  color:var(--ink3);border:1px dashed var(--gridhi);border-radius:4px;padding:1px 5px;margin-left:6px}
+.qa{display:flex;gap:11px;align-items:flex-start;margin-top:14px;padding:11px 14px;
+  border:1px solid rgba(217,89,38,.35);border-radius:10px;background:rgba(217,89,38,.07);
+  font-size:12px;line-height:1.55;color:var(--ink2)}
+.qa .k{flex:none;margin-top:1px;padding:2px 7px;border:1px solid rgba(217,89,38,.50);border-radius:4px;
+  font-size:9.5px;letter-spacing:.10em;font-weight:700;color:var(--s-obs);white-space:nowrap}
+.qa b{color:var(--ink);font-weight:650}
+.asum{margin-top:12px;padding:9px 13px;border:1px dashed var(--gridhi);border-radius:9px;
+  font-size:11.5px;line-height:1.5;color:var(--ink3)}
+.asum b{color:var(--ink2);font-weight:600}
+.sub-tag{display:inline-block;font-size:9.5px;letter-spacing:.10em;font-weight:700;color:var(--ink3);
+  border:1px solid var(--border);border-radius:4px;padding:2px 7px;margin-right:9px;vertical-align:2px}
+.lead{font-size:12px;line-height:1.55;color:var(--ink2);margin:2px 0 12px}
+.lead b{color:var(--ink);font-weight:650}
+.ser-l{font-size:10.5px;font-weight:600}
+.pnote{font-size:10.5px;font-weight:600}
 .mini{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:24px 20px;text-align:center}
 .mini h4{font-size:13.5px;font-weight:650;color:var(--ink);margin-bottom:6px}
 .mini p{font-size:12.5px;color:var(--ink2);max-width:640px;margin:0 auto}
@@ -241,8 +305,9 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
   /* The grouped bar charts carry a printed value on every bar, so they stop
      being legible below ~640 px. Let them scroll inside their own box rather
      than shrink the type; the page itself never scrolls sideways. */
-  #benchchart,#ablchart{overflow-x:auto}
+  #benchchart,#ablchart,#patchchart{overflow-x:auto}
   #benchchart svg,#ablchart svg{min-width:640px}
+  #patchchart svg{min-width:700px}
 }
 </style>
 </head>
@@ -504,8 +569,8 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
   </section>
 
   <section class="sec evsec" aria-labelledby="shA">
-    <div class="sec-h"><span class="k">03</span><span class="t" id="shA">Hyperspectral is the enabling sensor</span>
-      <span class="s">same MARSAD models, spectra degraded to each sensor · simulated</span></div>
+    <div class="sec-h"><span class="k">03</span><span class="t" id="shA">Spectral reach and pixel size are both required</span>
+      <span class="s">two-axis sensor ablation at intake scale · same MARSAD models · simulated</span></div>
     <div id="abl-body"></div>
   </section>
 
@@ -1050,139 +1115,675 @@ footer{margin-top:34px;border-top:1px solid var(--border);padding-top:14px;
       }).join("");
   })();
 
-  /* ---------- 03 · hyperspectral is the enabling sensor ---------- */
+  /* ---------- 03 · spectral reach and pixel size are both required ----------
+     v0.2 adds the spatial half of the ablation, and it is what makes the
+     comparison honest in both directions. The spectral-only ablation is not
+     wrong, it is incomplete: it silently assumes every sensor resolves the
+     bloom patch, which is exactly what a 300 m OLCI pixel or a 1 km MODIS
+     pixel cannot do for an intake-scale one. Order of the story:
+       1. the two-axis pass/fail verdict, 813 alone adequate on both;
+       2. accuracy against bloom patch size, where the coarse sensors collapse;
+       3. the original spectral bar chart, kept but subordinate.
+     Each panel degrades to a short notice when its block is missing from
+     benchmark.js, and the whole section falls back to the "run the benchmark"
+     notice when the file is absent. */
   (function renderAblation() {
-    if (!B || !B.ablation) { benchNotice("abl-body"); return; }
-    const AB = B.ablation, HD = B.headline || {};
-    // Which sensors actually carry a band on the 620 nm phycocyanin feature.
-    // Keys are fixed by docs/CONTRACTS-V2.md; the regex is only a fallback for
-    // a sensor added later.
+    if (!B || (!B.ablation && !B.spatial)) { benchNotice("abl-body"); return; }
+    const AB  = B.ablation || {};
+    const HD  = B.headline || {};
+    const SPA = (B.spatial && B.spatial.sensors) ? B.spatial : null;
+    const VD  = (B.verdict && B.verdict.sensors) ? B.verdict : null;
+
+    /* ---- shared sensor vocabulary ---- */
+    // Which sensors carry a band on the 620 nm phycocyanin feature. Keys are
+    // fixed by docs/CONTRACTS-V2.md; the benchmark's own has_620nm wins when
+    // present and the regex is only a fallback for a sensor added later.
     const PC620 = {marsad_813: true, sentinel2_msi: false, sentinel3_olci: true,
                    modis_aqua: false, landsat8_oli: false};
-    const has620 = k => (k in PC620) ? PC620[k] : !/\bno\b[^.]{0,40}620/i.test(AB[k].note || "");
-    const shortLabel = k => String(AB[k].label)
+    const rec = k => (VD && VD.sensors[k]) || (SPA && SPA.sensors[k]) || null;
+    const has620 = k => {
+      const r = rec(k);
+      if (r && typeof r.has_620nm === "boolean") return r.has_620nm;
+      if (k in PC620) return PC620[k];
+      return !/\bno\b[^.]{0,40}620/i.test((AB[k] && AB[k].note) || "");
+    };
+    const labelOf = k => String((AB[k] && AB[k].label) || (rec(k) && rec(k).label) || k);
+    const shortLabel = k => labelOf(k)
       .replace(/ imaging spectrometer$/i, "").replace(/\s*\(.*\)\s*$/, "");
-    const keys = Object.keys(AB).sort((a, b) => AB[b].n_bands - AB[a].n_bands);
-    const SERIES = [
-      {key: "accuracy",     name: "Speciation accuracy",   col: "var(--s-true)"},
-      {key: "cyano_recall", name: "Cyanobacteria recall",  col: "var(--s-obs)"},
-    ];
-    const groups = keys.map(k => ({
-      key: k, label: shortLabel(k), sub: `${AB[k].n_bands} bands`,
-      nb: AB[k].n_bands, pc: has620(k), values: AB[k],
-      hi: k === "marsad_813"
-        ? {fill: "rgba(47,191,174,.10)", stroke: "var(--accent)", label: "THE 813 INSTRUMENT"}
-        : null,
-    }));
-    const m813 = AB.marsad_813;
-    const multi = keys.filter(k => k !== "marsad_813");
-    const worst620less = multi.filter(k => !has620(k))
-      .reduce((a, k) => (a === null || AB[k].cyano_recall < AB[a].cyano_recall ? k : a), null);
-    const bandsMin = multi.length ? Math.min(...multi.map(k => AB[k].n_bands)) : 0;
-    const bandsMax = multi.length ? Math.max(...multi.map(k => AB[k].n_bands)) : 0;
+    const gsdOf = k => {
+      const r = rec(k);
+      return r && typeof r.gsd_m === "number" ? r.gsd_m : Infinity;
+    };
+    // Series colours: 813 keeps the brand teal, OLCI takes the warm accent
+    // because it is the sensor the whole section has to answer for. Every
+    // series also carries its own marker shape and a direct end label, so
+    // colour is never the only channel.
+    const SCOL = {marsad_813: "var(--accent)", sentinel2_msi: "var(--s-true)",
+                  landsat8_oli: "var(--s-ndci)", sentinel3_olci: "var(--s-obs)",
+                  modis_aqua: "var(--s-oc3m)"};
+    const SMARK = {marsad_813: "circle", sentinel2_msi: "square",
+                   landsat8_oli: "diamond", sentinel3_olci: "triangle",
+                   modis_aqua: "cross"};
+    const colOf = k => SCOL[k] || "var(--ink2)";
+    const markOf = k => SMARK[k] || "circle";
+    // 813 first (it is the instrument under test), then by ground sampling.
+    const order = list => list.slice().sort((a, b) => {
+      if ((a === "marsad_813") !== (b === "marsad_813")) return a === "marsad_813" ? -1 : 1;
+      const ga = gsdOf(a), gb = gsdOf(b);
+      return ga === gb ? a.localeCompare(b) : ga - gb;
+    });
 
+    const pct1 = v => (typeof v === "number" ? (v * 100).toFixed(1) + "%" : "n/a");
+    const pct2 = v => (typeof v === "number" ? (v * 100).toFixed(2) + "%" : "n/a");
+    // Percentage points. Sub-point gaps get a second decimal, because the
+    // spectral-only 813-over-OLCI margin is 0.45 points and rounding it to
+    // "0.4" would both look wrong and understate an already small number.
+    const ptsAbs = v => {
+      const p = Math.abs(v * 100);
+      return p.toFixed(p < 1 ? 2 : 1);
+    };
+    const ptsTxt = v => (v >= 0 ? "+" : "−") + ptsAbs(v);
+    const fmtLen = m => !isFinite(m) ? "n/a"
+      : (m >= 1000 ? (Math.round(m / 100) / 10) + " km" : m + " m");
+    const f3 = v => (typeof v === "number" ? v.toFixed(3) : "n/a");
+    // Distance from the phycocyanin band, read out of the verdict reason line
+    // when the benchmark states it; omitted rather than guessed if it does not.
+    const offset620 = k => {
+      const r = rec(k), s = (r && r.reason) ? String(r.reason) : "";
+      let m = /carries a band ([\d.]+)\s*nm from the 620/i.exec(s);
+      if (m) return (+m[1]).toFixed(0) + " nm";
+      m = /no band nearer than ([\d.]+)\s*nm to 620/i.exec(s);
+      if (m) return "≥ " + (+m[1]).toFixed(0) + " nm";
+      return "n/a";
+    };
+    const ASSUMED_GSD = (VD && VD.sensors.marsad_813 && typeof VD.sensors.marsad_813.gsd_m === "number")
+      ? VD.sensors.marsad_813.gsd_m
+      : (SPA && SPA.sensors.marsad_813 && typeof SPA.sensors.marsad_813.gsd_m === "number"
+         ? SPA.sensors.marsad_813.gsd_m : 30);
+    const GSD_NOTE =
+      "The MARSAD 813 ground sampling distance used on the spatial axis is an explicit assumption of " +
+      fmtLen(ASSUMED_GSD) + " (ASSUMED_813_GSD_M in the benchmark), chosen to match the EnMAP and PRISMA " +
+      "hyperspectral class. It is not a published figure and is to be replaced when GIQ publishes the real " +
+      "one; if the real value turns out to be coarser than the patch, 813 moves out of the adequate-on-both " +
+      "box exactly as OLCI does. Every other pixel size and band centre on this page is read off the " +
+      "published instrument specification, so only this one number is ours.";
+
+    /* ---- SVG marker shapes and the matching legend swatch ---- */
+    const mark = (shape, x, y, col) => {
+      const s = 4.2, X = +x.toFixed(1), Y = +y.toFixed(1);
+      if (shape === "square")
+        return `<rect x="${(X - s).toFixed(1)}" y="${(Y - s).toFixed(1)}" width="${(2 * s).toFixed(1)}"
+                      height="${(2 * s).toFixed(1)}" fill="${col}"/>`;
+      if (shape === "triangle")
+        return `<polygon points="${X},${(Y - s - 1).toFixed(1)} ${(X + s + .8).toFixed(1)},${(Y + s).toFixed(1)}
+                        ${(X - s - .8).toFixed(1)},${(Y + s).toFixed(1)}" fill="${col}"/>`;
+      if (shape === "diamond")
+        return `<polygon points="${X},${(Y - s - 1.2).toFixed(1)} ${(X + s + 1.2).toFixed(1)},${Y}
+                        ${X},${(Y + s + 1.2).toFixed(1)} ${(X - s - 1.2).toFixed(1)},${Y}" fill="${col}"/>`;
+      if (shape === "cross")
+        return `<path d="M ${(X - s).toFixed(1)} ${(Y - s).toFixed(1)} L ${(X + s).toFixed(1)} ${(Y + s).toFixed(1)}
+                         M ${(X - s).toFixed(1)} ${(Y + s).toFixed(1)} L ${(X + s).toFixed(1)} ${(Y - s).toFixed(1)}"
+                      stroke="${col}" stroke-width="2.1" stroke-linecap="round" fill="none"/>`;
+      return `<circle cx="${X}" cy="${Y}" r="${s}" fill="${col}"/>`;
+    };
+    const lineSwatch = (col, shape, name, wide) => `
+      <span class="li"><svg width="28" height="12" aria-hidden="true">
+        <line x1="0" x2="28" y1="6" y2="6" stroke="${col}" stroke-width="${wide ? 3 : 2}"/>
+        ${mark(shape, 14, 6, col)}</svg>${name}</span>`;
+
+    const blockNotice = (title, what) => `
+      <div class="p-h"><span class="t">${esc(title)}</span>
+        <span class="s">not in this benchmark.js</span></div>
+      <div class="cap" style="margin-top:6px">The <b>${esc(what)}</b> block was not found in
+        <code style="font-family:var(--mono)">dashboard/benchmark.js</code>. Regenerate it from the repo root
+        with <code style="font-family:var(--mono)">python scripts/run_benchmark.py</code> and reload;
+        the other panels in this section work without it.</div>`;
+
+    /* ---- section skeleton ---- */
     document.getElementById("abl-body").innerHTML = `
       ${honestyBox(B.honesty_note || "Measured on our own physics-based forward model: a self-consistency check against a simulation, not validation on real scenes.")}
       <div class="tiles" id="abl-tiles"></div>
-      <div class="panel">
+      <div class="pstack">
+        <div class="panel" id="abl-verdict"></div>
+        <div class="panel" id="abl-patch"></div>
+        <div class="panel" id="abl-spec"></div>
+      </div>`;
+
+    /* ---------- headline tiles ---------- */
+    (function fillTiles() {
+      const host = document.getElementById("abl-tiles");
+      const me = VD ? VD.sensors.marsad_813 : null;
+      const ol = VD ? VD.sensors.sentinel3_olci : null;
+      const ref = VD ? VD.reference_patch_size_m : 100;
+
+      if (!me || !ol) {                       // spectral-only benchmark.js
+        const m813 = AB.marsad_813;
+        if (!m813) { host.innerHTML = ""; return; }
+        const multi = Object.keys(AB).filter(k => k !== "marsad_813");
+        const worst = multi.filter(k => !has620(k))
+          .reduce((a, k) => (a === null || AB[k].cyano_recall < AB[a].cyano_recall ? k : a), null);
+        host.innerHTML = `
+          <div class="tile">
+            <div class="l">Spectral-only gain</div>
+            <div class="v">${HD.hyperspectral_gain !== undefined ? ptsTxt(HD.hyperspectral_gain) : "n/a"}<small> pts</small></div>
+            <div class="d">813 accuracy minus the best multispectral sensor, patch size not modelled</div>
+          </div>
+          <div class="tile">
+            <div class="l">Cyanobacteria recall · 813</div>
+            <div class="v">${pct1(m813.cyano_recall)}</div>
+            <div class="d">${worst ? esc(shortLabel(worst)) + ", no 620 nm band: " + pct1(AB[worst].cyano_recall)
+                                   : "phycocyanin needs a band at 620 nm"}</div>
+          </div>
+          <div class="tile">
+            <div class="l">Contiguous bands</div>
+            <div class="v">${m813.n_bands}</div>
+            <div class="d">the spatial axis is missing from this benchmark.js, so this is the incomplete comparison</div>
+          </div>`;
+        return;
+      }
+
+      const keys = Object.keys(VD.sensors);
+      const nBoth = keys.filter(k => VD.sensors[k].spectral_ok && VD.sensors[k].spatial_ok).length;
+      const dAcc = me.accuracy_at_reference - ol.accuracy_at_reference;
+      const dRec = me.cyano_recall_at_reference - ol.cyano_recall_at_reference;
+      // OLCI at the coarsest patch is the control: there it does resolve the patch.
+      const oSeries = (SPA && SPA.sensors.sentinel3_olci && SPA.sensors.sentinel3_olci.by_patch_size) || [];
+      const oCtl = oSeries.length ? oSeries[oSeries.length - 1] : null;
+      const oRef = oSeries.find(r => r.patch_size_m === ref) || null;
+      const costAcc = (oCtl && oRef) ? oRef.accuracy - oCtl.accuracy : null;
+      const costRec = (oCtl && oRef) ? oRef.cyano_recall - oCtl.cyano_recall : null;
+
+      host.innerHTML = `
+        <div class="tile">
+          <div class="l">Adequate on both axes</div>
+          <div class="v">${nBoth} <small>of ${keys.length}</small></div>
+          <div class="d">${nBoth === 1 ? "MARSAD 813 only" : "sensors"} · a band within
+            ${VD.pc_band_tolerance_nm} nm of ${VD.pc_band_nm} nm <i>and</i> a pixel a ${fmtLen(ref)} patch fills</div>
+        </div>
+        <div class="tile">
+          <div class="l">813 over OLCI at ${fmtLen(ref)}</div>
+          <div class="v">${ptsTxt(dAcc)}<small> pts</small></div>
+          <div class="d">accuracy · cyanobacteria recall ${ptsTxt(dRec)} pts · the spectral-only ablation
+            gave ${HD.hyperspectral_gain !== undefined ? ptsTxt(HD.hyperspectral_gain) : "n/a"} pts</div>
+        </div>
+        <div class="tile">
+          <div class="l">OLCI cost of intake scale</div>
+          <div class="v">${costAcc === null ? "n/a" : ptsTxt(costAcc)}<small> pts</small></div>
+          <div class="d">accuracy, ${oCtl ? fmtLen(oCtl.patch_size_m) : "control"} patch down to ${fmtLen(ref)} ·
+            cyanobacteria recall ${costRec === null ? "n/a" : ptsTxt(costRec)} pts</div>
+        </div>
+        <div class="tile">
+          <div class="l">Cyanobacteria recall at ${fmtLen(ref)}</div>
+          <div class="v">${pct1(me.cyano_recall_at_reference)}</div>
+          <div class="d">MARSAD 813 · Sentinel-3 OLCI ${pct1(ol.cyano_recall_at_reference)} on the same patch</div>
+        </div>`;
+    })();
+
+    /* ---------- panel 1 · the two-axis verdict matrix ---------- */
+    (function fillVerdict() {
+      const host = document.getElementById("abl-verdict");
+      if (!VD) { host.innerHTML = blockNotice("Two-axis sensor verdict", "verdict"); return; }
+
+      const ref = VD.reference_patch_size_m, thr = VD.fill_fraction_threshold;
+      const pcnm = VD.pc_band_nm, tol = VD.pc_band_tolerance_nm;
+      const keys = order(Object.keys(VD.sensors));
+      const bucket = (sp, sa) => keys.filter(k =>
+        !!VD.sensors[k].spectral_ok === sp && !!VD.sensors[k].spatial_ok === sa);
+      const pill = ok => `<span class="vp ${ok ? "pass" : "fail"}">
+        <span class="g" aria-hidden="true">${ok ? "✓" : "✗"}</span>${ok ? "PASS" : "FAIL"}</span>`;
+
+      const cell = (cls, glyph, lab, ks) => `
+        <td class="q ${cls}">
+          <div class="q-lab"><span class="g" aria-hidden="true">${glyph}</span>${lab}</div>
+          ${ks.length ? ks.map(k => {
+            const v = VD.sensors[k];
+            return `<div class="q-s">${esc(shortLabel(k))}
+              <span class="m">${fmtLen(v.gsd_m)} pixel · fill ${f3(v.fill_fraction_at_reference)} ·
+                acc ${pct1(v.accuracy_at_reference)} · cyano ${pct1(v.cyano_recall_at_reference)}</span></div>`;
+          }).join("") : `<div class="q-empty">no sensor in this box</div>`}
+        </td>`;
+
+      const matrix = `
+        <div class="qm-wrap"><table class="qm">
+          <tr>
+            <td></td>
+            <th scope="col">SPATIAL PASS
+              <span>a ${fmtLen(ref)} patch fills at least ${thr.toFixed(2)} of one pixel</span></th>
+            <th scope="col">SPATIAL FAIL
+              <span>a ${fmtLen(ref)} patch is sub-pixel, so the reading is diluted with the water around it</span></th>
+          </tr>
+          <tr>
+            <th class="rowh" scope="row">SPECTRAL PASS
+              <span>carries a band within ${tol} nm of the ${pcnm} nm phycocyanin line</span></th>
+            ${cell("ok", "●", "ADEQUATE ON BOTH AXES", bucket(true, true))}
+            ${cell("half", "◆", "SPECTRAL ONLY · PIXEL TOO COARSE", bucket(true, false))}
+          </tr>
+          <tr>
+            <th class="rowh" scope="row">SPECTRAL FAIL
+              <span>no band within ${tol} nm of ${pcnm} nm, so phycocyanin is interpolated over</span></th>
+            ${cell("half", "◆", "SPATIAL ONLY · BLIND TO " + pcnm + " nm", bucket(false, true))}
+            ${cell("bad", "▲", "INADEQUATE ON BOTH AXES", bucket(false, false))}
+          </tr>
+        </table></div>`;
+
+      const rows = keys.map(k => {
+        const v = VD.sensors[k];
+        return `<tr class="${k === "marsad_813" ? "me" : ""}">
+          <td>${esc(shortLabel(k))}${k === "marsad_813" ? ` <span class="asu">assumed GSD</span>` : ""}</td>
+          <td class="c">${pill(!!v.spectral_ok)}</td>
+          <td>${offset620(k)}</td>
+          <td class="c">${pill(!!v.spatial_ok)}</td>
+          <td>${fmtLen(v.gsd_m)}</td>
+          <td>${f3(v.fill_fraction_at_reference)}</td>
+          <td>${pct1(v.accuracy_at_reference)}</td>
+          <td>${pct1(v.cyano_recall_at_reference)}</td>
+        </tr>`;
+      }).join("");
+
+      const table = `
+        <div class="vt-wrap"><table class="vt">
+          <tr><th scope="col">sensor</th><th class="c" scope="col">spectral</th>
+              <th scope="col">nearest band to ${pcnm} nm</th>
+              <th class="c" scope="col">spatial</th><th scope="col">pixel</th>
+              <th scope="col">fill at ${fmtLen(ref)}</th>
+              <th scope="col">accuracy</th><th scope="col">cyanobacteria recall</th></tr>
+          ${rows}
+        </table></div>`;
+
+      const ol = VD.sensors.sentinel3_olci, me = VD.sensors.marsad_813, s2 = VD.sensors.sentinel2_msi;
+      const olciBox = (ol && me) ? `
+        <div class="qa"><span class="k">OLCI</span><span>
+          <b>"Why not just use free daily Sentinel-3 OLCI?"</b> Because it passes on one axis and fails on the
+          other, and only the spatial axis makes that visible. OLCI is the one operational ocean-colour sensor
+          carrying a ${pcnm} nm band, so it passes spectrally, and on the spectral-only ablation below it lands
+          within ${HD.hyperspectral_gain !== undefined ? ptsAbs(HD.hyperspectral_gain) + " of a point" : "a fraction of a point"}
+          of the 205-band instrument. We are not hiding that. But its pixel is ${fmtLen(ol.gsd_m)} across, so a
+          ${fmtLen(ref)} intake-scale patch fills only ${f3(ol.fill_fraction_at_reference)} of it and the
+          spectrum arrives mixed with the clear water around the patch. At that patch size OLCI scores
+          ${pct1(ol.accuracy_at_reference)} accuracy and ${pct1(ol.cyano_recall_at_reference)} cyanobacteria
+          recall, against ${pct1(me.accuracy_at_reference)} and ${pct1(me.cyano_recall_at_reference)} for
+          MARSAD 813${(s2 && ol.accuracy_at_reference < s2.accuracy_at_reference) ? `, and it falls below
+          ${esc(shortLabel("sentinel2_msi"))} (${pct1(s2.accuracy_at_reference)}), which has no ${pcnm} nm band
+          at all: OLCI's spectral advantage is erased by its pixel size` : ""}.
+        </span></div>` : "";
+
+      host.innerHTML = `
         <div class="p-h">
-          <span class="t">Speciation accuracy and cyanobacteria recall, by sensor</span>
+          <span class="t">Two-axis verdict at a ${fmtLen(ref)} intake-scale patch</span>
+          <span class="s">spectral: a band within ${tol} nm of ${pcnm} nm ·
+            spatial: the patch fills at least ${thr.toFixed(2)} of one pixel</span>
+        </div>
+        <div class="lead">A sensor has to clear <b>both</b> axes to warn a desalination intake about an
+          intake-scale bloom. Missing either one is disqualifying on its own, and four of the five sensors
+          here miss one or both. Pass and fail are printed as words and glyphs as well as colour.</div>
+        ${matrix}${table}${olciBox}
+        ${VD.summary ? `<div class="cap"><b>Verdict.</b> ${esc(VD.summary)}</div>` : ""}
+        ${VD.note ? `<div class="cap"><b>How the two axes are decided.</b> ${esc(VD.note)}</div>` : ""}
+        <div class="asum"><b>Assumption.</b> ${esc(GSD_NOTE)}</div>`;
+    })();
+
+    /* ---------- panel 2 · accuracy against bloom patch size ---------- */
+    (function fillPatch() {
+      const host = document.getElementById("abl-patch");
+      if (!SPA) { host.innerHTML = blockNotice("Accuracy against bloom patch size", "spatial"); return; }
+      const PX = (SPA.patch_sizes_m || []).slice().sort((a, b) => a - b);
+      const keys = order(Object.keys(SPA.sensors));
+      if (PX.length < 2 || !keys.length) {
+        host.innerHTML = blockNotice("Accuracy against bloom patch size", "spatial");
+        return;
+      }
+
+      const ref = (VD && typeof VD.reference_patch_size_m === "number") ? VD.reference_patch_size_m : 100;
+      let refIdx = 0;
+      PX.forEach((p, i) => { if (Math.abs(p - ref) < Math.abs(PX[refIdx] - ref)) refIdx = i; });
+      const REF = PX[refIdx], CTL = PX[PX.length - 1];
+
+      const METRICS = [
+        {key: "accuracy",     name: "Speciation accuracy",  short: "speciation accuracy"},
+        {key: "cyano_recall", name: "Cyanobacteria recall", short: "cyanobacteria recall"},
+      ];
+      const DATA = {};
+      keys.forEach(k => {
+        const m = {};
+        ((SPA.sensors[k] || {}).by_patch_size || []).forEach(r => { m[r.patch_size_m] = r; });
+        DATA[k] = PX.map(p => m[p] || null);
+      });
+
+      host.innerHTML = `
+        <div class="tabs" role="tablist" aria-label="Metric shown against patch size" id="patch-tabs">
+          ${METRICS.map((m, i) => `<button role="tab" id="ptab-${i}" data-m="${m.key}"
+             aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}">${m.name}</button>`).join("")}
+        </div>
+        <div class="p-h">
+          <span class="t" id="patch-title"></span>
+          <span class="legend" id="patch-legend"></span>
+        </div>
+        <div class="lead">Every sensor is scored on the signal it would actually receive: the bloom patch is
+          mixed into one of its pixels with the clear water around it before the spectra are degraded to its
+          band set. A sensor whose pixel is <b>already smaller than the patch</b> does not move at any size
+          shown. A sensor whose pixel is <b>much larger than the patch</b> collapses as the patch shrinks
+          past it, because most of what it measures is the water beside the bloom rather than the bloom.</div>
+        <div class="chart-wrap" id="patchchart"></div>
+        <div class="cap" id="patch-cap"></div>
+        <details class="tblv"><summary>View data table</summary>
+          <div class="scroll"><table class="dt" id="patchtable"></table></div>
+        </details>`;
+
+      document.getElementById("patch-legend").innerHTML = keys.map(k =>
+        lineSwatch(colOf(k), markOf(k), esc(shortLabel(k)) + " · " + fmtLen(gsdOf(k)),
+                   k === "marsad_813")).join("");
+
+      /* geometry: log x over the patch sizes, linear y over the full 0-1 range
+         so no part of the collapse is exaggerated by a clipped axis. */
+      const PC = {W: 960, H: 408, l: 58, r: 152, t: 56, b: 60};
+      PC.pw = PC.W - PC.l - PC.r; PC.ph = PC.H - PC.t - PC.b;
+      const lo = Math.log10(PX[0]), hi = Math.log10(PX[PX.length - 1]);
+      const cx = v => PC.l + (hi > lo ? (Math.log10(v) - lo) / (hi - lo) : 0.5) * PC.pw;
+      const cy = v => PC.t + (1 - Math.max(0, Math.min(1, v))) * PC.ph;
+
+      function renderPatch(metric) {
+        const M = METRICS.find(m => m.key === metric) || METRICS[0];
+        const val = (k, i) => {
+          const r = DATA[k][i];
+          return (r && typeof r[M.key] === "number") ? r[M.key] : null;
+        };
+
+        const grid = [0, .2, .4, .6, .8, 1].map(v => `
+          <line x1="${PC.l}" x2="${PC.l + PC.pw}" y1="${cy(v).toFixed(1)}" y2="${cy(v).toFixed(1)}"
+                stroke="var(--grid)" stroke-width="1"/>
+          <text class="axis-t" x="${PC.l - 8}" y="${(cy(v) + 4).toFixed(1)}"
+                text-anchor="end">${(v * 100).toFixed(0)}%</text>`).join("");
+        const xt = PX.map(p => `
+          <line x1="${cx(p).toFixed(1)}" x2="${cx(p).toFixed(1)}" y1="${PC.t}" y2="${(PC.t + PC.ph).toFixed(1)}"
+                stroke="var(--grid)" stroke-width="1" opacity=".65"/>
+          <text class="axis-t" x="${cx(p).toFixed(1)}" y="${PC.H - 30}"
+                text-anchor="middle">${fmtLen(p)}</text>`).join("");
+
+        const refX = cx(REF);
+        const refMark = `
+          <rect x="${PC.l}" y="${PC.t - 28}" width="${(refX - PC.l).toFixed(1)}"
+                height="${(PC.ph + 28).toFixed(1)}" fill="rgba(47,191,174,.055)"/>
+          <line x1="${refX.toFixed(1)}" x2="${refX.toFixed(1)}" y1="${PC.t - 28}"
+                y2="${(PC.t + PC.ph).toFixed(1)}" stroke="var(--accent)" stroke-width="1"
+                stroke-dasharray="5 4" opacity=".85"/>
+          <text class="pnote" x="${(refX - 8).toFixed(1)}" y="${PC.t - 14}" text-anchor="end"
+                fill="var(--accent)">← ${fmtLen(REF)} REFERENCE</text>
+          <text class="pnote" x="${(refX + 8).toFixed(1)}" y="${PC.t - 14}"
+                fill="var(--ink3)">PATCH GROWS → ${fmtLen(CTL)} CONTROL</text>`;
+
+        const paths = keys.map(k => {
+          const pts = [];
+          PX.forEach((p, i) => { const v = val(k, i); if (v !== null) pts.push([cx(p), cy(v)]); });
+          if (!pts.length) return "";
+          return `<path d="${linePath(pts)}" fill="none" stroke="${colOf(k)}"
+                        stroke-width="${k === "marsad_813" ? 3 : 2}"
+                        stroke-linejoin="round" stroke-linecap="round"/>`;
+        }).join("");
+        const marks = keys.map(k => PX.map((p, i) => {
+          const v = val(k, i);
+          return v === null ? "" : mark(markOf(k), cx(p), cy(v), colOf(k));
+        }).join("")).join("");
+
+        // Direct end-of-line labels, pushed apart when two sensors land within
+        // a few pixels of each other, with a leader back to the real point.
+        const ends = keys.map(k => ({k, v: val(k, PX.length - 1)}))
+          .filter(e => e.v !== null)
+          .map(e => ({k: e.k, v: e.v, y0: cy(e.v), y: cy(e.v)}))
+          .sort((a, b) => a.y0 - b.y0);
+        for (let i = 1; i < ends.length; i++)
+          if (ends[i].y - ends[i - 1].y < 15) ends[i].y = ends[i - 1].y + 15;
+        const over = ends.length ? Math.max(0, ends[ends.length - 1].y - (PC.t + PC.ph)) : 0;
+        ends.forEach(e => { e.y -= over; });
+        const lx = PC.l + PC.pw + 15;
+        const endLabels = ends.map(e => `
+          <line x1="${(cx(CTL) + 6).toFixed(1)}" y1="${e.y0.toFixed(1)}" x2="${(lx - 5).toFixed(1)}"
+                y2="${e.y.toFixed(1)}" stroke="${colOf(e.k)}" stroke-width="1" opacity=".55"/>
+          <text class="ser-l" x="${lx}" y="${(e.y + 3.6).toFixed(1)}"
+                fill="${colOf(e.k)}">${esc(shortLabel(e.k))} ${pct1(e.v)}</text>`).join("");
+
+        // The OLCI story, drawn: where it sits when it does resolve the patch,
+        // and how far it falls at the intake-scale reference.
+        let anno = "";
+        const vRef = val("sentinel3_olci", refIdx), vCtl = val("sentinel3_olci", PX.length - 1);
+        if (vRef !== null && vCtl !== null && vCtl - vRef > 0.02) {
+          const yC = cy(vCtl), yR = cy(vRef), bx = refX + 10, col = colOf("sentinel3_olci");
+          anno = `
+            <line x1="${refX.toFixed(1)}" x2="${(PC.l + PC.pw).toFixed(1)}" y1="${yC.toFixed(1)}"
+                  y2="${yC.toFixed(1)}" stroke="${col}" stroke-width="1" stroke-dasharray="3 4" opacity=".55"/>
+            <line x1="${bx.toFixed(1)}" x2="${bx.toFixed(1)}" y1="${yC.toFixed(1)}" y2="${yR.toFixed(1)}"
+                  stroke="${col}" stroke-width="1.3"/>
+            <line x1="${(bx - 4).toFixed(1)}" x2="${(bx + 4).toFixed(1)}" y1="${yC.toFixed(1)}"
+                  y2="${yC.toFixed(1)}" stroke="${col}" stroke-width="1.3"/>
+            <line x1="${(bx - 4).toFixed(1)}" x2="${(bx + 4).toFixed(1)}" y1="${yR.toFixed(1)}"
+                  y2="${yR.toFixed(1)}" stroke="${col}" stroke-width="1.3"/>
+            ${mark("triangle", refX + 46, PC.t + PC.ph - 52, col)}
+            <text class="pnote" x="${(refX + 56).toFixed(1)}" y="${(PC.t + PC.ph - 48).toFixed(1)}"
+                  fill="${col}">Sentinel-3 OLCI ${ptsTxt(vRef - vCtl)} pts at the ${fmtLen(REF)} intake scale</text>
+            <text class="pnote" x="${(refX + 56).toFixed(1)}" y="${(PC.t + PC.ph - 32).toFixed(1)}"
+                  fill="${col}">spectral PASS, spatial FAIL · dotted line = OLCI once the patch fills its ${fmtLen(gsdOf("sentinel3_olci"))} pixel</text>`;
+        }
+
+        // one tooltip per patch size, all sensors ranked
+        const tips = PX.map((p, i) => {
+          const rows = keys.map(k => ({k, v: val(k, i), r: DATA[k][i]}))
+            .filter(x => x.v !== null)
+            .sort((a, b) => b.v - a.v);
+          return `<div class="h">patch ${fmtLen(p)} · ${M.short}</div>` + rows.map(x => `
+            <div class="r"><span class="sw" style="background:${colOf(x.k)}"></span>${esc(shortLabel(x.k))}
+              <span class="v">${pct1(x.v)} · fill ${f3(x.r.fill_fraction)}</span></div>`).join("");
+        });
+        const edges = [PC.l];
+        for (let i = 1; i < PX.length; i++) edges.push((cx(PX[i - 1]) + cx(PX[i])) / 2);
+        edges.push(PC.l + PC.pw);
+        const hovers = PX.map((p, i) => `
+          <rect class="hb" data-i="${i}" x="${edges[i].toFixed(1)}" y="${PC.t}"
+                width="${(edges[i + 1] - edges[i]).toFixed(1)}" height="${PC.ph}" fill="transparent"/>`).join("");
+
+        const aria = `Line chart, one line per sensor: ${M.short} against bloom patch size from ` +
+          `${fmtLen(PX[0])} to ${fmtLen(CTL)} on a logarithmic axis. ` +
+          keys.map(k => `${shortLabel(k)}, ${fmtLen(gsdOf(k))} pixel, ` +
+            `${pct1(val(k, refIdx))} at the ${fmtLen(REF)} reference and ${pct1(val(k, PX.length - 1))} at ` +
+            `${fmtLen(CTL)}`).join(". ") + ". Exact values are in the data table below the chart.";
+
+        document.getElementById("patch-title").textContent =
+          `${M.name} against bloom patch size, one line per sensor`;
+        document.getElementById("patchchart").innerHTML = `
+          <svg viewBox="0 0 ${PC.W} ${PC.H}" role="img" aria-label="${esc(aria)}">
+            ${refMark}${grid}${xt}
+            <line x1="${PC.l}" x2="${PC.l + PC.pw}" y1="${PC.t + PC.ph}" y2="${PC.t + PC.ph}"
+                  stroke="var(--gridhi)" stroke-width="1"/>
+            <text class="axis-cap" x="${PC.l}" y="15">${esc(M.name.toUpperCase())} · HIGHER IS BETTER</text>
+            <text class="axis-cap" x="${PC.W - 6}" y="15" text-anchor="end">SIMULATED</text>
+            ${paths}${marks}${anno}${endLabels}
+            <text class="axis-t" x="${PC.l}" y="${PC.H - 10}">bloom patch size · log scale</text>
+            <line id="pc-cross" y1="${PC.t}" y2="${PC.t + PC.ph}" stroke="var(--gridhi)"
+                  stroke-width="1" opacity="0"/>
+            ${hovers}
+          </svg>`;
+
+        const svg = document.querySelector("#patchchart svg");
+        const cross = svg.querySelector("#pc-cross");
+        svg.querySelectorAll("rect.hb").forEach(rc => {
+          rc.addEventListener("mousemove", e => {
+            const i = +rc.dataset.i;
+            cross.setAttribute("x1", cx(PX[i])); cross.setAttribute("x2", cx(PX[i]));
+            cross.setAttribute("opacity", "1");
+            showTT(tips[i], e.clientX, e.clientY);
+          });
+        });
+        svg.addEventListener("mouseleave", () => { cross.setAttribute("opacity", "0"); hideTT(); });
+
+        const me = val("marsad_813", refIdx), ol = val("sentinel3_olci", refIdx);
+        document.getElementById("patch-cap").innerHTML =
+          `<b>How to read this.</b> The x axis is the width of the bloom patch, on a log scale; the reference
+           is the ${fmtLen(REF)} intake-scale patch this system is built for, and the ${fmtLen(CTL)} patch at
+           the right edge is the control where every sensor resolves it. Flat lines are sensors whose pixel is
+           already smaller than the patch. <b>Method.</b> ${esc(SPA.note || "")}
+           <b>${esc(shortLabel("marsad_813"))}.</b> Its ${fmtLen(ASSUMED_GSD)} pixel is an assumption, not a
+           published figure, so its flat line is an assumed capability while every other line rests on a
+           published ground sampling distance.${(me !== null && ol !== null) ? ` At the ${fmtLen(REF)}
+           reference the gap between MARSAD 813 and Sentinel-3 OLCI on ${M.short} is
+           ${ptsTxt(me - ol)} points.` : ""}
+           <b>Data basis.</b> Both the patch spectra and the background water come from
+           <code style="font-family:var(--mono)">marsad.synth</code>, our own physics-based forward model, so
+           this is a self-consistency check against a simulation, consistent with the Case-2 water literature,
+           and never independent validation on real Gulf scenes.
+           ${SPA.n_train && SPA.n_test ? `Trained on ${SPA.n_train} and evaluated on ${SPA.n_test} simulated pixels per sensor and patch size.` : ""}`;
+      }
+
+      document.getElementById("patchtable").innerHTML =
+        `<tr><th>sensor</th><th>pixel (m)</th><th>patch size (m)</th><th>fill fraction</th>
+             <th>speciation accuracy</th><th>cyanobacteria recall</th><th>bloom recall</th>
+             <th>false alarm rate</th></tr>` +
+        keys.map(k => DATA[k].map((r, i) => r ? `<tr>
+          <td>${esc(shortLabel(k))}</td>
+          <td>${isFinite(gsdOf(k)) ? gsdOf(k) : "n/a"}</td>
+          <td>${PX[i]}</td>
+          <td>${f3(r.fill_fraction)}</td>
+          <td>${pct2(r.accuracy)}</td>
+          <td>${pct2(r.cyano_recall)}</td>
+          <td>${pct2(r.bloom_recall)}</td>
+          <td>${pct2(r.false_alarm_rate)}</td></tr>` : "").join("")).join("");
+
+      const ptabs = document.getElementById("patch-tabs");
+      const selectMetric = (btn, focus) => {
+        ptabs.querySelectorAll("button").forEach(x => {
+          const on = x === btn;
+          x.setAttribute("aria-selected", on);
+          x.tabIndex = on ? 0 : -1;
+          if (on && focus) x.focus();
+        });
+        renderPatch(btn.dataset.m);
+      };
+      ptabs.addEventListener("click", e => {
+        const b = e.target.closest("button"); if (b) selectMetric(b);
+      });
+      ptabs.addEventListener("keydown", e => {
+        if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+        e.preventDefault();
+        const bs = [...ptabs.querySelectorAll("button")];
+        const cur = bs.findIndex(x => x.getAttribute("aria-selected") === "true");
+        const n = bs.length;
+        selectMetric(bs[(cur + (e.key === "ArrowRight" ? 1 : n - 1)) % n], true);
+      });
+      renderPatch(METRICS[0].key);
+    })();
+
+    /* ---------- panel 3 · the spectral axis on its own (supporting) ---------- */
+    (function fillSpectral() {
+      const host = document.getElementById("abl-spec");
+      const keys = Object.keys(AB).sort((a, b) => AB[b].n_bands - AB[a].n_bands);
+      if (!keys.length) { host.innerHTML = blockNotice("Spectral axis on its own", "ablation"); return; }
+      const m813 = AB.marsad_813 || AB[keys[0]];
+      const SERIES = [
+        {key: "accuracy",     name: "Speciation accuracy",  col: "var(--s-true)"},
+        {key: "cyano_recall", name: "Cyanobacteria recall", col: "var(--s-obs)"},
+      ];
+      const groups = keys.map(k => ({
+        key: k, label: shortLabel(k), sub: `${AB[k].n_bands} bands`,
+        nb: AB[k].n_bands, pc: has620(k), values: AB[k],
+        hi: k === "marsad_813"
+          ? {fill: "rgba(47,191,174,.10)", stroke: "var(--accent)", label: "THE 813 INSTRUMENT"}
+          : null,
+      }));
+
+      host.innerHTML = `
+        <div class="p-h">
+          <span class="t"><span class="sub-tag">SUPPORTING</span>The spectral axis on its own, by sensor band set</span>
           <span class="legend" id="abl-legend"></span>
         </div>
+        <div class="lead">This is the half of the ablation that assumes every sensor resolves the bloom patch.
+          On its own it <b>understates</b> the case, because a 300 m pixel and a 30 m pixel are both scored on
+          an undiluted patch spectrum here. Read it with the patch-size panel above, not instead of it.</div>
         <div class="chart-wrap" id="ablchart"></div>
         <div class="cap" id="abl-cap"></div>
         <ul class="snotes" id="abl-notes"></ul>
         <details class="tblv"><summary>View data table</summary>
           <div class="scroll"><table class="dt" id="abltable"></table></div>
-        </details>
-      </div>`;
+        </details>`;
 
-    document.getElementById("abl-tiles").innerHTML = `
-      <div class="tile">
-        <div class="l">Hyperspectral gain</div>
-        <div class="v">${HD.hyperspectral_gain !== undefined
-          ? (HD.hyperspectral_gain >= 0 ? "+" : "−") + Math.abs(HD.hyperspectral_gain * 100).toFixed(1)
-          : "n/a"}<small> pts</small></div>
-        <div class="d">813 accuracy minus the best multispectral sensor - small on purpose, see the note below</div>
-      </div>
-      <div class="tile">
-        <div class="l">Cyanobacteria recall · 813</div>
-        <div class="v">${(m813.cyano_recall * 100).toFixed(1)}<small>%</small></div>
-        <div class="d">${worst620less
-          ? esc(shortLabel(worst620less)) + ", no 620 nm band: " +
-            (AB[worst620less].cyano_recall * 100).toFixed(1) + "%"
-          : "phycocyanin needs a band at 620 nm"}</div>
-      </div>
-      <div class="tile">
-        <div class="l">Contiguous bands</div>
-        <div class="v">${m813.n_bands}</div>
-        <div class="d">${bandsMin} to ${bandsMax} usable water bands on the multispectral sensors</div>
-      </div>`;
+      document.getElementById("abl-legend").innerHTML =
+        SERIES.map(s => barSwatch(s.col, s.name)).join("");
 
-    document.getElementById("abl-legend").innerHTML =
-      SERIES.map(s => barSwatch(s.col, s.name)).join("");
+      const chart = groupedBars({
+        W: 960, H: 396, l: 56, r: 18, t: 46, b: 84, slot: 0.56,
+        groups, series: SERIES, yMax: 1.06, ticks: [0, .2, .4, .6, .8, 1],
+        yCap: "SPECIATION ACCURACY / CYANOBACTERIA RECALL · PATCH ASSUMED RESOLVED",
+        aria: "Grouped bars: speciation accuracy and cyanobacteria recall for the same MARSAD architecture " +
+              "retrained on spectra degraded to each sensor's band set, ordered by band count, with every " +
+              "sensor assumed to resolve the bloom patch. Exact values are in the data table below the chart.",
+        fmtTick: v => (v * 100).toFixed(0) + "%",
+        fmtVal: v => (v * 100).toFixed(1),
+        fmtTip: v => (v * 100).toFixed(2) + "%",
+        groupLabel: (g, gx, yb) => {
+          const L = wrap2(g.label, 18);
+          const y2 = L[1] ? yb + 50 : yb + 36;
+          return `
+            <text class="grp-l${g.hi ? " hi2" : ""}" x="${gx.toFixed(1)}" y="${yb + 21}"
+                  text-anchor="middle">${esc(L[0])}</text>
+            ${L[1] ? `<text class="grp-l${g.hi ? " hi2" : ""}" x="${gx.toFixed(1)}" y="${yb + 35}"
+                  text-anchor="middle">${esc(L[1])}</text>` : ""}
+            <text class="grp-s" x="${gx.toFixed(1)}" y="${y2}" text-anchor="middle">${g.nb} bands</text>
+            <text class="grp-s grp-620 ${g.pc ? "yes" : "no"}" x="${gx.toFixed(1)}" y="${y2 + 15}"
+                  text-anchor="middle">${g.pc ? "✓ 620 nm band" : "✗ no 620 nm band"}</text>`;
+        },
+        extra: G => {
+          const y = G.by(m813.cyano_recall);
+          return `
+            <line x1="${G.l}" x2="${G.l + G.pw}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}"
+                  stroke="var(--s-obs)" stroke-width="1" stroke-dasharray="5 5" opacity=".7"/>
+            <text class="note-t" x="${G.l + G.pw - 4}" y="${(y - 6).toFixed(1)}" text-anchor="end"
+                  fill="var(--s-obs)">813 cyanobacteria recall ${pct1(m813.cyano_recall)}</text>`;
+        },
+      });
+      drawBars("ablchart", chart);
 
-    const chart = groupedBars({
-      W: 960, H: 396, l: 56, r: 18, t: 46, b: 84, slot: 0.56,
-      groups, series: SERIES, yMax: 1.06, ticks: [0, .2, .4, .6, .8, 1],
-      yCap: "SPECIATION ACCURACY / CYANOBACTERIA RECALL · HIGHER IS BETTER",
-      aria: "Grouped bars: speciation accuracy and cyanobacteria recall for the same MARSAD architecture " +
-            "retrained on spectra degraded to each sensor's band set, ordered by band count. " +
-            "Exact values are in the data table below the chart.",
-      fmtTick: v => (v * 100).toFixed(0) + "%",
-      fmtVal: v => (v * 100).toFixed(1),
-      fmtTip: v => (v * 100).toFixed(2) + "%",
-      groupLabel: (g, cx, yb) => {
-        const L = wrap2(g.label, 18);
-        const y2 = L[1] ? yb + 50 : yb + 36;
-        return `
-          <text class="grp-l${g.hi ? " hi2" : ""}" x="${cx.toFixed(1)}" y="${yb + 21}"
-                text-anchor="middle">${esc(L[0])}</text>
-          ${L[1] ? `<text class="grp-l${g.hi ? " hi2" : ""}" x="${cx.toFixed(1)}" y="${yb + 35}"
-                text-anchor="middle">${esc(L[1])}</text>` : ""}
-          <text class="grp-s" x="${cx.toFixed(1)}" y="${y2}" text-anchor="middle">${g.nb} bands</text>
-          <text class="grp-s grp-620 ${g.pc ? "yes" : "no"}" x="${cx.toFixed(1)}" y="${y2 + 15}"
-                text-anchor="middle">${g.pc ? "✓ 620 nm band" : "✗ no 620 nm band"}</text>`;
-      },
-      extra: G => {
-        const y = G.by(m813.cyano_recall);
-        return `
-          <line x1="${G.l}" x2="${G.l + G.pw}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}"
-                stroke="var(--s-obs)" stroke-width="1" stroke-dasharray="5 5" opacity=".7"/>
-          <text class="note-t" x="${G.l + G.pw - 4}" y="${(y - 6).toFixed(1)}" text-anchor="end"
-                fill="var(--s-obs)">813 cyanobacteria recall ${(m813.cyano_recall * 100).toFixed(1)}%</text>`;
-      },
-    });
-    drawBars("ablchart", chart);
+      // What the spatial panel adds, quoted back here in numbers when it exists.
+      const me = VD ? VD.sensors.marsad_813 : null, ol = VD ? VD.sensors.sentinel3_olci : null;
+      const refTxt = VD ? fmtLen(VD.reference_patch_size_m) : "the intake scale";
+      const twoAxis = (me && ol) ? `
+        Add the spatial axis, as the panel above does, and the same comparison at a ${refTxt} patch becomes
+        ${ptsTxt(me.accuracy_at_reference - ol.accuracy_at_reference)} points of accuracy and
+        ${ptsTxt(me.cyano_recall_at_reference - ol.cyano_recall_at_reference)} points of cyanobacteria recall,
+        because a ${fmtLen(ol.gsd_m)} OLCI pixel is filled only ${f3(ol.fill_fraction_at_reference)} by that
+        patch. Neither number alone is the answer: the spectral one is what OLCI can see, the spatial one is
+        what it can see it in.` : `
+        The spatial half of the ablation is not in this benchmark.js, so this panel is the whole of what is
+        loaded, and on its own it cannot answer the OLCI question. Regenerate with
+        <code style="font-family:var(--mono)">python scripts/run_benchmark.py</code>.`;
 
-    document.getElementById("abl-cap").innerHTML =
-      `<b>Method.</b> The same MARSAD Stage-1 + Stage-2 architecture is retrained and evaluated once per
-       sensor. Observed spectra are resampled onto each sensor's real band set with Gaussian spectral
-       response functions, then interpolated back onto the 205-band grid, so every model sees an identical
-       array width and only the spectral <i>information</i> differs.
-       <b>The honest reading.</b> Sensors with no band on the 620 nm phycocyanin feature lose cyanobacteria
-       recall first and hardest, which is the class an operator most needs named. Sentinel-3 OLCI, the one
-       operational ocean-colour sensor that does carry a 620 nm band, lands within a fraction of a point of
-       the 205-band instrument here - and we are not going to hide that. What this per-pixel simulation
-       cannot show is the part that decides the real case: OLCI's single 10 nm band sits at 300 m ground
-       sampling, so one pixel covers about 9 hectares and has to separate phycocyanin absorption from
-       co-varying sediment and chlorophyll absorption inside it, while an intake-scale patch is smaller than
-       that pixel. Spatial sampling is not modelled here at all.
-       <b>Data basis.</b> All of it runs on <code style="font-family:var(--mono)">marsad.synth</code>, our own
-       physics-based forward model, so these are self-consistency checks against a simulation, never
-       independent validation on real Gulf scenes.`;
+      document.getElementById("abl-cap").innerHTML =
+        `<b>Method.</b> The same MARSAD Stage-1 + Stage-2 architecture is retrained and evaluated once per
+         sensor. Observed spectra are resampled onto each sensor's real band set with Gaussian spectral
+         response functions, then interpolated back onto the 205-band grid, so every model sees an identical
+         array width and only the spectral <i>information</i> differs. Ground sampling is deliberately not
+         modelled in this panel.
+         <b>The honest reading.</b> Sensors with no band on the 620 nm phycocyanin feature lose cyanobacteria
+         recall first and hardest, which is the class an operator most needs named. Sentinel-3 OLCI, the one
+         operational ocean-colour sensor that does carry a 620 nm band, lands within a fraction of a point of
+         the 205-band instrument here, and we are not going to hide that. ${twoAxis}
+         <b>Data basis.</b> All of it runs on <code style="font-family:var(--mono)">marsad.synth</code>, our
+         own physics-based forward model, so these are self-consistency checks against a simulation,
+         consistent with the Case-2 water literature, and never independent validation on real Gulf
+         scenes.${B.generated_utc ? ` Benchmark generated <b>${esc(B.generated_utc)}</b>.` : ""}`;
 
-    document.getElementById("abl-notes").innerHTML = keys.map(k => `
-      <li><b>${esc(AB[k].label)}</b>
-        <span class="tagpc ${has620(k) ? "yes" : "no"}">${has620(k) ? "620 nm band present" : "no 620 nm band"}</span>
-        <br>${esc(AB[k].note)}</li>`).join("");
+      document.getElementById("abl-notes").innerHTML = keys.map(k => `
+        <li><b>${esc(AB[k].label)}</b>
+          <span class="tagpc ${has620(k) ? "yes" : "no"}">${has620(k) ? "620 nm band present" : "no 620 nm band"}</span>
+          ${(VD && VD.sensors[k] && isFinite(gsdOf(k)))
+            ? `<span class="tagpc ${VD.sensors[k].spatial_ok ? "yes" : "no"}">${fmtLen(gsdOf(k))} pixel${
+                k === "marsad_813" ? " (assumed)" : ""}: spatial ${VD.sensors[k].spatial_ok ? "PASS" : "FAIL"}</span>`
+            : ""}
+          <br>${esc(AB[k].note)}</li>`).join("");
 
-    document.getElementById("abltable").innerHTML =
-      `<tr><th>sensor</th><th>bands</th><th>620 nm</th><th>speciation accuracy</th><th>cyanobacteria recall</th></tr>` +
-      keys.map(k => `<tr><td>${esc(AB[k].label)}</td><td>${AB[k].n_bands}</td>
-        <td>${has620(k) ? "yes" : "no"}</td>
-        <td>${(AB[k].accuracy * 100).toFixed(2)}%</td>
-        <td>${(AB[k].cyano_recall * 100).toFixed(2)}%</td></tr>`).join("");
+      document.getElementById("abltable").innerHTML =
+        `<tr><th>sensor</th><th>bands</th><th>620 nm</th><th>speciation accuracy</th>
+             <th>cyanobacteria recall</th></tr>` +
+        keys.map(k => `<tr><td>${esc(AB[k].label)}</td><td>${AB[k].n_bands}</td>
+          <td>${has620(k) ? "yes" : "no"}</td>
+          <td>${pct2(AB[k].accuracy)}</td>
+          <td>${pct2(AB[k].cyano_recall)}</td></tr>`).join("");
+    })();
   })();
 
   /* ---------- boot ---------- */

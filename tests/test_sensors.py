@@ -6,8 +6,12 @@ exercise the resampling maths rather than the forward model.
 
 The headline behaviour under test is the one the hyperspectral claim rests on:
 the 620 nm phycocyanin line survives a sensor that has a 620 nm band and is
-interpolated away by one that does not. That is a statement about band sets and
-linear algebra, not a claim about real Gulf water.
+interpolated away by one that does not. The spatial tests add the other half of
+"what a sensor can see": a 100 m intake-scale patch fills about a ninth of a
+300 m OLCI pixel and one hundredth of a 1 km MODIS pixel, so even a sensor with
+the right band arrives with a diluted signal. Both halves are statements about
+band tables, pixel geometry and linear algebra applied to our own simulated
+spectra, not claims about real Gulf water.
 """
 from __future__ import annotations
 
@@ -17,7 +21,16 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from marsad.sensors import SENSORS, Band, Sensor, resample, resample_to_grid
+from marsad.sensors import (
+    ASSUMED_813_GSD_M,
+    SENSORS,
+    Band,
+    Sensor,
+    mix_subpixel,
+    resample,
+    resample_to_grid,
+    subpixel_fill_fraction,
+)
 from marsad.spectra import BAND_GRID, N_BANDS, band_index, gaussian_feature
 
 MULTISPECTRAL = tuple(k for k in SENSORS if k != "marsad_813")
@@ -292,6 +305,214 @@ def test_round_trip_keeps_array_width_for_the_ablation():
     for key in SENSORS:
         back = resample_to_grid(resample(rrs, key), key)
         assert back.shape == rrs.shape, key
+
+
+# --------------------------------------------------------------------------
+# ground sampling distance and sub-pixel dilution
+# --------------------------------------------------------------------------
+
+def test_every_sensor_declares_a_positive_ground_sampling_distance():
+    for key, sensor in SENSORS.items():
+        assert isinstance(sensor.gsd_m, float), key
+        assert np.isfinite(sensor.gsd_m) and sensor.gsd_m > 0.0, key
+
+
+def test_documented_ground_sampling_distances():
+    """Published figures, for the water-relevant bands of each instrument."""
+    assert SENSORS["sentinel2_msi"].gsd_m == 20.0     # red edge B5-B7, not 10 m
+    assert SENSORS["sentinel3_olci"].gsd_m == 300.0   # full resolution
+    assert SENSORS["modis_aqua"].gsd_m == 1000.0      # ocean-colour bands
+    assert SENSORS["landsat8_oli"].gsd_m == 30.0
+
+
+def test_sentinel2_note_explains_the_20_m_red_edge():
+    """The bloom signal rides on B5-B7, which are 20 m, so 10 m is not the
+    number that matters for this application."""
+    note = SENSORS["sentinel2_msi"].note.lower()
+    assert "20 m" in note
+    assert "b5-b7" in note
+    assert "10 m" in note
+
+
+def test_813_gsd_is_labelled_an_assumption_not_a_published_fact():
+    """813 has published no GSD, so ours must never read as a specification."""
+    assert SENSORS["marsad_813"].gsd_m == ASSUMED_813_GSD_M == 30.0
+    note = SENSORS["marsad_813"].note.lower()
+    assert "assum" in note
+    assert "enmap" in note and "prisma" in note
+
+
+def test_assumed_813_gsd_is_a_greppable_module_constant():
+    import marsad.sensors as sensors_module
+
+    source = Path(sensors_module.__file__).read_text(encoding="utf-8")
+    assert "ASSUMED_813_GSD_M = 30.0" in source
+    assert "assum" in (sensors_module.__doc__ or "").lower()
+
+
+def test_new_sensors_default_to_the_assumed_813_gsd():
+    """The field is defaulted, so existing construction sites keep working."""
+    ad_hoc = Sensor(
+        key="ad_hoc",
+        label="band table built without a gsd",
+        bands=(Band("B1", 560.0, 30.0),),
+        note="no ground sampling distance given",
+    )
+    assert ad_hoc.gsd_m == ASSUMED_813_GSD_M
+
+
+def test_non_positive_gsd_is_rejected():
+    for bad in (0.0, -30.0, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="gsd_m"):
+            Sensor(
+                key="bad_gsd",
+                label="impossible pixel",
+                bands=(Band("B1", 560.0, 30.0),),
+                note="a pixel must have a positive size",
+                gsd_m=bad,
+            )
+
+
+def test_fill_fraction_is_one_when_the_patch_covers_the_pixel():
+    for key, sensor in SENSORS.items():
+        assert subpixel_fill_fraction(sensor.gsd_m, key) == 1.0, key
+        assert subpixel_fill_fraction(4.0 * sensor.gsd_m, key) == 1.0, key
+
+
+def test_fill_fraction_falls_as_the_square_of_the_size_ratio():
+    """A 100 m intake-scale patch, seen by each pixel size."""
+    assert subpixel_fill_fraction(100.0, "sentinel3_olci") == pytest.approx(0.111, abs=1e-3)
+    assert subpixel_fill_fraction(100.0, "modis_aqua") == pytest.approx(0.01, abs=1e-12)
+    # the 20-30 m class resolves the same patch outright
+    assert subpixel_fill_fraction(100.0, "marsad_813") == 1.0
+    assert subpixel_fill_fraction(100.0, "sentinel2_msi") == 1.0
+    assert subpixel_fill_fraction(100.0, "landsat8_oli") == 1.0
+
+    # quadratic below the pixel: halving the patch quarters the fill
+    for key in ("sentinel3_olci", "modis_aqua"):
+        gsd = SENSORS[key].gsd_m
+        assert subpixel_fill_fraction(50.0, key) == pytest.approx(
+            0.25 * subpixel_fill_fraction(100.0, key)
+        ), key
+        assert subpixel_fill_fraction(30.0, key) == pytest.approx((30.0 / gsd) ** 2), key
+
+
+def test_fill_fraction_ranks_the_sensors_by_pixel_size():
+    fills = {key: subpixel_fill_fraction(100.0, key) for key in SENSORS}
+    assert fills["marsad_813"] == 1.0
+    assert fills["marsad_813"] > fills["sentinel3_olci"] > fills["modis_aqua"] > 0.0
+
+
+def test_fill_fraction_accepts_a_sensor_object_or_a_key():
+    sensor = SENSORS["sentinel3_olci"]
+    assert subpixel_fill_fraction(100.0, sensor) == subpixel_fill_fraction(
+        100.0, "sentinel3_olci"
+    )
+    with pytest.raises(KeyError):
+        subpixel_fill_fraction(100.0, "hyperion")
+
+
+def test_fill_fraction_rejects_non_positive_or_non_finite_patch_size():
+    for bad in (0.0, -1.0, -1e-9, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="patch_size_m"):
+            subpixel_fill_fraction(bad, "modis_aqua")
+
+
+def test_mix_with_a_full_pixel_returns_the_target_exactly():
+    rng = np.random.default_rng(21)
+    target = 0.03 * rng.random((5, N_BANDS))
+    background = 0.01 * rng.random((5, N_BANDS))
+    out = mix_subpixel(target, background, 300.0, "sentinel3_olci")
+    assert np.array_equal(out, target)
+
+
+def test_mix_with_a_tiny_patch_returns_almost_the_background():
+    rng = np.random.default_rng(22)
+    target = 0.03 * rng.random((5, N_BANDS))
+    background = 0.01 * rng.random((5, N_BANDS))
+    fill = subpixel_fill_fraction(5.0, "modis_aqua")   # (5/1000)**2 = 2.5e-5
+    assert fill < 1e-4
+    out = mix_subpixel(target, background, 5.0, "modis_aqua")
+    assert not np.array_equal(out, background)         # not silently discarded
+    assert np.abs(out - background).max() < 1e-5
+
+
+def test_mixed_output_stays_between_its_two_inputs_elementwise():
+    rng = np.random.default_rng(23)
+    target = 0.03 * rng.random((7, N_BANDS))
+    background = 0.02 * rng.random((7, N_BANDS))
+    lo = np.minimum(target, background)
+    hi = np.maximum(target, background)
+    for key in SENSORS:
+        for patch_m in (5.0, 100.0, 500.0, 5000.0):
+            out = mix_subpixel(target, background, patch_m, key)
+            assert out.shape == target.shape, key
+            assert out.dtype == np.float64, key
+            assert np.isfinite(out).all(), key
+            assert (out >= lo - 1e-12).all(), key
+            assert (out <= hi + 1e-12).all(), key
+
+
+def test_mix_broadcasts_a_single_background_across_many_targets():
+    rng = np.random.default_rng(24)
+    target = 0.03 * rng.random((4, N_BANDS))
+    background = 0.01 * rng.random(N_BANDS)
+    fill = subpixel_fill_fraction(100.0, "sentinel3_olci")
+
+    out = mix_subpixel(target, background, 100.0, "sentinel3_olci")
+    assert out.shape == (4, N_BANDS)
+    assert out.dtype == np.float64
+    expected = fill * target + (1.0 - fill) * background[None, :]
+    assert np.abs(out - expected).max() < 1e-15
+
+    # one spectrum at a time gives the same rows, and stays 1-D
+    for i in range(4):
+        single = mix_subpixel(target[i], background, 100.0, "sentinel3_olci")
+        assert single.shape == (N_BANDS,)
+        assert np.allclose(single, out[i])
+
+
+def test_mix_rejects_bad_shapes_row_counts_and_patch_sizes():
+    target = np.zeros((3, N_BANDS))
+    with pytest.raises(ValueError):
+        mix_subpixel(target, np.zeros((2, N_BANDS)), 100.0, "modis_aqua")
+    with pytest.raises(ValueError):
+        mix_subpixel(np.zeros((3, N_BANDS - 1)), target, 100.0, "modis_aqua")
+    with pytest.raises(ValueError):
+        mix_subpixel(target, np.zeros((3, 4)), 100.0, "modis_aqua")
+    with pytest.raises(ValueError, match="patch_size_m"):
+        mix_subpixel(target, np.zeros((3, N_BANDS)), 0.0, "modis_aqua")
+    with pytest.raises(KeyError):
+        mix_subpixel(target, np.zeros((3, N_BANDS)), 100.0, "hyperion")
+
+
+def test_subpixel_dilution_shrinks_the_620_line_olci_would_otherwise_see():
+    """The spatial term on top of the spectral one.
+
+    OLCI carries Oa7 at 620 nm, so on a patch that fills the pixel it keeps a
+    real part of the phycocyanin line. Put the same patch at intake scale,
+    100 m, inside a 300 m OLCI pixel and the line arrives at about a ninth of
+    its depth, because the pixel is mostly the clear water around the bloom.
+    Both spectra are our own simulated shapes: this is geometry and linear
+    algebra, never a field comparison of the instruments.
+    """
+    bloom = _smooth_water_spectrum() - 0.0025 * gaussian_feature(620.0, 30.0)
+    background = 0.4 * _smooth_water_spectrum()          # clear water, no PC dip
+
+    def olci_line_height(spectrum: np.ndarray) -> float:
+        lifted = resample_to_grid(resample(spectrum[None, :], "sentinel3_olci"), "sentinel3_olci")
+        return _line_height_620(lifted[0])
+
+    resolved = olci_line_height(bloom)
+    floor = olci_line_height(background)
+    diluted = olci_line_height(mix_subpixel(bloom, background, 100.0, "sentinel3_olci"))
+    fill = subpixel_fill_fraction(100.0, "sentinel3_olci")
+
+    assert resolved - floor > 0.0
+    # linear mixing, linear resampling, linear line height: the signal above the
+    # background scales by exactly the fill fraction
+    assert diluted - floor == pytest.approx(fill * (resolved - floor), rel=1e-9)
+    assert 0.0 < diluted - floor < 0.2 * (resolved - floor)
 
 
 # --------------------------------------------------------------------------
